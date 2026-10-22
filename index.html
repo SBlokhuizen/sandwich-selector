@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sandwich Selector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="data.js"></script>
+<script src="analysis.js"></script>
+<style>
+:root {
+  --bg: #faf7f2; --surface: #ffffff; --surface-2: #f3eee6; --text: #1f1b16; --muted: #6f675c; --border: #e7dfd3;
+  --accent: #d9480f; --accent-soft: #fff0e6; --good: #2b8a3e; --bad: #e03131; --mid: #efe9e0;
+  --shadow: 0 1px 2px rgba(60,40,10,.06), 0 4px 16px rgba(60,40,10,.06);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14110e; --surface: #1e1a16; --surface-2: #29241e; --text: #f3eee7; --muted: #a59c90; --border: #36302a;
+    --accent: #ff8a3d; --accent-soft: #3a2416; --good: #51cf66; --bad: #ff6b6b; --mid: #2c2722;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14110e; --surface: #1e1a16; --surface-2: #29241e; --text: #f3eee7; --muted: #a59c90; --border: #36302a;
+  --accent: #ff8a3d; --accent-soft: #3a2416; --good: #51cf66; --bad: #ff6b6b; --mid: #2c2722;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--accent); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+.top .wrap { display: flex; align-items: center; gap: 20px; height: 60px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em; font-size: 18px; white-space: nowrap; }
+.brand .logo { font-size: 24px; }
+nav.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+nav.tabs button { border: 0; background: none; padding: 8px 14px; border-radius: 999px; cursor: pointer; color: var(--muted); font-weight: 600; white-space: nowrap; transition: background .15s, color .15s; }
+nav.tabs button:hover { color: var(--text); background: var(--surface-2); }
+nav.tabs button[aria-selected="true"] { color: var(--accent); background: var(--accent-soft); }
+#theme { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; width: 36px; height: 36px; cursor: pointer; flex: none; font-size: 18px; line-height: 1; }
+main { padding: 28px 0 60px; }
+section[role="tabpanel"] { display: none; animation: fade .2s ease; }
+section[role="tabpanel"].on { display: block; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } }
+h1 { font-size: clamp(26px, 4vw, 38px); letter-spacing: -.03em; margin: 0 0 6px; line-height: 1.15; }
+h2 { font-size: 20px; letter-spacing: -.02em; margin: 0 0 4px; }
+h3 { font-size: 15px; margin: 0 0 8px; }
+.lead { color: var(--muted); margin: 0 0 22px; max-width: 760px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; }
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.g4 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.stack > * + * { margin-top: 16px; }
+
+/* search box */
+.combo { position: relative; }
+.combo input { width: 100%; padding: 14px 16px 14px 44px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); outline: none; font-size: 16px; transition: border-color .15s, box-shadow .15s; }
+.combo input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.combo::before { content: "⌕"; position: absolute; left: 16px; top: 50%; transform: translateY(-52%); font-size: 20px; color: var(--muted); pointer-events: none; }
+.combo-list { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 6px); margin: 0; padding: 6px; list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); max-height: 360px; overflow: auto; }
+.combo-list li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; cursor: pointer; }
+.combo-list li.active { background: var(--surface-2); }
+.combo-list li .muted { margin-left: auto; font-size: 13px; text-align: right; }
+
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-block; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px; font-weight: 500; cursor: pointer; transition: border-color .15s, transform .1s; white-space: nowrap; }
+.chip:hover { border-color: var(--accent); }
+.chip:active { transform: scale(.97); }
+.chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.chip .x { opacity: .6; margin-left: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn { border: 0; background: var(--accent); color: #fff; padding: 9px 16px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+.btn.ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+.seg button { border: 0; background: none; padding: 5px 12px; border-radius: 7px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* topping detail */
+.hero { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.hero h2 { font-size: 28px; }
+.stat { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+.stat b { display: block; font-size: 22px; letter-spacing: -.02em; }
+.stat span { font-size: 12.5px; color: var(--muted); }
+.pairs { display: grid; grid-template-columns: 1fr; }
+.pair { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 70px; align-items: center; gap: 12px; padding: 7px 8px; border-radius: 9px; cursor: pointer; }
+.pair:hover { background: var(--surface-2); }
+.pair .name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pair .name b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pair .name span { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar { position: relative; height: 10px; background: var(--surface-2); border-radius: 99px; }
+.bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--border); }
+.bar i { position: absolute; top: 0; bottom: 0; border-radius: 99px; }
+.score { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; font-size: 13.5px; }
+.verdict { font-size: 11.5px; font-weight: 500; color: var(--muted); display: block; }
+.legend { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.legend .ramp { width: 160px; height: 10px; border-radius: 99px; }
+
+/* builder */
+.sandwich { display: flex; flex-direction: column; gap: 12px; }
+.sandwich .layers { display: flex; flex-wrap: wrap; gap: 6px; }
+.meter { height: 6px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--good); border-radius: 99px; }
+.mini { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12.5px; color: var(--muted); }
+.mini b { font-variant-numeric: tabular-nums; }
+
+/* matrix & graph */
+.viz { position: relative; overflow: auto; }
+canvas { display: block; }
+#graph-canvas { width: 100%; height: min(72vh, 720px); border-radius: 12px; background: var(--surface); cursor: grab; touch-action: none; }
+.tip { position: fixed; z-index: 50; pointer-events: none; background: var(--text); color: var(--bg); padding: 8px 10px; border-radius: 9px; font-size: 13px; max-width: 280px; box-shadow: var(--shadow); opacity: 0; transition: opacity .1s; }
+.tip.on { opacity: 1; }
+.settings { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; padding: 12px 16px; }
+.settings label { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 500; }
+.settings input[type=range] { accent-color: var(--accent); width: 140px; }
+.settings output { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 34px; }
+.side { position: absolute; top: 12px; right: 12px; width: 260px; max-width: calc(100% - 24px); max-height: calc(100% - 24px); overflow: auto; }
+
+/* analysis */
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+th { font-weight: 600; color: var(--muted); position: sticky; top: 0; background: var(--surface); cursor: pointer; white-space: nowrap; user-select: none; }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+th.sorted { color: var(--accent); }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--surface-2); }
+.tablewrap { max-height: 520px; overflow: auto; border-radius: 10px; }
+.cluster { border-left: 4px solid; padding-left: 14px; }
+.cm td { text-align: center; font-variant-numeric: tabular-nums; font-size: 12px; border: 2px solid var(--surface); border-radius: 6px; padding: 6px 4px; }
+.cm th { position: static; cursor: default; font-size: 12px; }
+.triple { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.triple .ok { color: var(--good); font-weight: 700; }
+.triple .no { color: var(--bad); font-weight: 700; }
+.empty { color: var(--muted); padding: 20px; text-align: center; }
+@media (max-width: 640px) {
+  .top .wrap { height: auto; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+  nav.tabs { order: 3; flex-basis: 100%; }
+  .pair { grid-template-columns: minmax(0, 1fr) 80px 56px; }
+  .pair .name span { display: none; }
+  .side { position: static; width: auto; margin-top: 12px; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><span class="logo" aria-hidden="true">🥪</span>The Sandwich Selector</div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="search">Pairings</button>
+      <button role="tab" data-tab="build">Build a sandwich</button>
+      <button role="tab" data-tab="graph">Network</button>
+      <button role="tab" data-tab="matrix">Matrix</button>
+      <button role="tab" data-tab="analysis">Insights</button>
+    </nav>
+    <button id="theme" title="Toggle light/dark" aria-label="Toggle light or dark theme">◐</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="tab-search" role="tabpanel">
+    <h1>What goes with your topping?</h1>
+    <p class="lead">Pick any of <span class="n-items"></span> Dutch sandwich toppings and see how well every other topping pairs with it — from <b style="color:var(--good)">+1 perfect</b> through 0 neutral to <b style="color:var(--bad)">−1 awful</b>.</p>
+    <div class="combo"><input id="q" placeholder="Search a topping, e.g. pindakaas, oude kaas, haring…" aria-label="Search a topping"></div>
+    <div class="row" style="margin-top:14px"><span class="muted small">Try:</span><div class="chips" id="popular"></div></div>
+    <div id="detail" class="stack" style="margin-top:24px"></div>
+  </section>
+
+  <section id="tab-build" role="tabpanel">
+    <h1>Build a sandwich</h1>
+    <p class="lead">Add the toppings you want (or none at all) and get combinations where <i>every</i> ingredient goes well with every other one. Butter is assumed, so it is never suggested on its own.</p>
+    <div class="card stack">
+      <div class="combo"><input id="bq" placeholder="Add a topping you want on it…" aria-label="Add a topping"></div>
+      <div class="row"><span class="muted small">Must include:</span><div class="chips" id="seeds"></div></div>
+      <div class="row"><span class="muted small">Toppings per sandwich:</span><div class="seg" id="size"></div></div>
+    </div>
+    <div id="results" class="grid g2" style="margin-top:18px"></div>
+  </section>
+
+  <section id="tab-graph" role="tabpanel">
+    <h1>The pairing network</h1>
+    <p class="lead">Each dot is a topping; a line means the two pair well (score ≥ the threshold). Toppings that like each other pull together, so clusters form naturally. Hover to highlight, click to pin, scroll to zoom, drag to pan.</p>
+    <div class="card settings threshold-bar"></div>
+    <div class="row" style="margin-bottom:12px">
+      <span class="muted small">Colour by</span><div class="seg" id="colorby"><button data-v="comm" class="on">Cluster</button><button data-v="cat">Category</button></div>
+      <div class="combo" style="flex:1;min-width:220px"><input id="gq" placeholder="Find a topping in the network…" aria-label="Find a topping in the network"></div>
+    </div>
+    <div class="card viz" style="padding:0"><canvas id="graph-canvas"></canvas><div class="card side" id="gside" hidden></div></div>
+    <div class="chips" id="glegend" style="margin-top:12px"></div>
+  </section>
+
+  <section id="tab-matrix" role="tabpanel">
+    <h1>The full matrix</h1>
+    <p class="lead">Every topping against every other: <b style="color:var(--good)">green</b> pairs well, <b style="color:var(--bad)">red</b> clashes. Sorted by cluster, the green blocks on the diagonal are the groups that belong together. Hover for details, click to open a topping.</p>
+    <div class="row" style="margin-bottom:12px"><span class="muted small">Order by</span><div class="seg" id="morder"><button data-v="comm" class="on">Cluster</button><button data-v="cat">Category</button></div><div class="legend"><span>−1</span><span class="ramp" id="ramp"></span><span>+1</span></div></div>
+    <div class="card viz"><canvas id="matrix-canvas"></canvas></div>
+    <div class="chips" id="mlegend" style="margin-top:12px"></div>
+  </section>
+
+  <section id="tab-analysis" role="tabpanel">
+    <h1>Insights</h1>
+    <p class="lead">What the network says about Dutch sandwich culture. Everything is recomputed live when you move the thresholds.</p>
+    <div class="card settings threshold-bar"></div>
+    <div id="insights" class="stack"></div>
+  </section>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+const { items, S, cats } = DATA;
+const N = items.length;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const CAT = {
+  butter: ["Butter & margarine", "#d4b483"], sweet: ["Sweet toppings", "#9c6644"], jam: ["Jam, honey & syrup", "#e64980"],
+  nut: ["Nut butters", "#c08552"], fruit: ["Fruit", "#ff922b"], cheese: ["Cheese", "#fab005"], meat: ["Cold cuts", "#c92a2a"],
+  fish: ["Fish", "#339af0"], salad: ["Salads & spreads", "#20c997"], sauce: ["Sauces", "#845ef7"], egg: ["Eggs", "#a9e34b"],
+  veg: ["Vegetables & herbs", "#2f9e44"], hot: ["Hot snacks", "#e8590c"], extra: ["Crunchy extras", "#868e96"],
+};
+const COMM_COLORS = ["#4263eb", "#e8590c", "#2f9e44", "#ae3ec9", "#f08c00", "#1098ad", "#e64980", "#74b816", "#7048e8", "#c92a2a", "#0ca678", "#a61e4d", "#5c940d", "#364fc7"];
+const cssVar = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt = (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v / 10).toFixed(1);
+const verdict = (v) => (v >= 8 ? "Perfect" : v >= 4 ? "Good" : v > -4 ? "Neutral" : v > -8 ? "Bad" : "Awful");
+const dot = (c) => `<span class="dot" style="background:${c}"></span>`;
+const catDot = (i) => dot(CAT[items[i].cat][1]);
+
+// score -> colour, 21 precomputed steps; rebuilt on theme change
+let PAL = [];
+function buildPalette() {
+  const mid = cssVar("--mid"), good = cssVar("--good"), bad = cssVar("--bad");
+  PAL = d3.range(-10, 11).map((v) => (v < 0 ? d3.interpolateRgb(mid, bad)(-v / 10) : d3.interpolateRgb(mid, good)(v / 10)));
+  $("#ramp").style.background = `linear-gradient(90deg, ${PAL[0]}, ${PAL[10]}, ${PAL[20]})`;
+}
+const scoreColor = (v) => PAL[v + 10];
+
+// ---------- derived analysis state ----------
+let thr = 7, bad = -5, G;
+function recompute() {
+  const adj = Analysis.goodAdj(S, thr);
+  const comm = Analysis.louvain(S, thr);
+  const commSize = [];
+  comm.forEach((c) => (commSize[c] = (commSize[c] || 0) + 1));
+  G = { adj, comm, commSize, stats: Analysis.nodeStats(S, adj, bad), comps: Analysis.components(adj), bridges: Analysis.bridges(adj) };
+  G.commName = commSize.map((_, c) => {
+    const count = {};
+    comm.forEach((x, i) => x === c && (count[items[i].cat] = (count[items[i].cat] || 0) + 1));
+    return Object.entries(count).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => CAT[k][0]).join(" + ");
+  });
+}
+const commColor = (c) => (G.commSize[c] > 1 ? COMM_COLORS[c % COMM_COLORS.length] : "#adb5bd");
+
+// ---------- autocomplete ----------
+const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const KEYS = items.map((it) => norm(it.name + " | " + it.en));
+function combo(input, onPick, allow = () => true) {
+  const list = document.createElement("ul");
+  list.className = "combo-list"; list.setAttribute("role", "listbox"); list.hidden = true; list.id = input.id + "-list";
+  input.after(list);
+  Object.assign(input, { autocomplete: "off", spellcheck: false });
+  input.setAttribute("role", "combobox"); input.setAttribute("aria-controls", list.id); input.setAttribute("aria-expanded", "false");
+  let matches = [], active = 0;
+  const paint = () => [...list.children].forEach((li, k) => { li.classList.toggle("active", k === active); if (k === active) input.setAttribute("aria-activedescendant", li.id); });
+  const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); };
+  const pick = (i) => { input.value = ""; close(); onPick(i); };
+  input.addEventListener("input", () => {
+    const q = norm(input.value.trim());
+    if (!q) return close();
+    const rank = (i) => (norm(items[i].name).startsWith(q) ? 0 : KEYS[i].includes(" " + q) ? 1 : 2);
+    matches = d3.range(N).filter((i) => allow(i) && KEYS[i].includes(q)).sort((a, b) => rank(a) - rank(b)).slice(0, 8);
+    active = 0;
+    list.innerHTML = matches.map((i, k) => `<li role="option" id="${list.id}-${k}" data-i="${i}">${catDot(i)}<b>${esc(items[i].name)}</b><span class="muted">${esc(items[i].en)}</span></li>`).join("") || `<li class="empty">No topping matches “${esc(input.value)}”</li>`;
+    list.hidden = false; input.setAttribute("aria-expanded", "true"); paint();
+  });
+  input.addEventListener("keydown", (e) => {
+    if (list.hidden || !matches.length) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); active = (active + (e.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length; paint(); }
+    else if (e.key === "Enter") { e.preventDefault(); pick(matches[active]); }
+    else if (e.key === "Escape") close();
+  });
+  list.addEventListener("mousedown", (e) => { const li = e.target.closest("li[data-i]"); if (li) { e.preventDefault(); pick(+li.dataset.i); } });
+  input.addEventListener("blur", close);
+}
+
+// ---------- tabs & routing (#tab or #search:Name) ----------
+let tab = "search", current = -1;
+function show(t) {
+  tab = t;
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === t));
+  document.querySelectorAll("section[role=tabpanel]").forEach((s) => s.classList.toggle("on", s.id === "tab-" + t));
+  render();
+}
+function route() {
+  const [t, arg] = decodeURIComponent(location.hash.slice(1)).split(":");
+  if (t === "search" && arg) current = items.findIndex((it) => it.name === arg);
+  show(["search", "build", "graph", "matrix", "analysis"].includes(t) ? t : "search");
+}
+const openItem = (i) => { location.hash = "search:" + encodeURIComponent(items[i].name); window.scrollTo({ top: 0, behavior: "smooth" }); };
+document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => (location.hash = b.dataset.tab)));
+window.addEventListener("hashchange", route);
+document.addEventListener("click", (e) => { const el = e.target.closest("[data-open]"); if (el) openItem(+el.dataset.open); });
+
+function render() {
+  if (graph.sim && tab !== "graph") graph.sim.stop();
+  ({ search: renderSearch, build: renderBuild, graph: renderGraph, matrix: renderMatrix, analysis: renderInsights })[tab]();
+}
+
+// ---------- Pairings tab ----------
+const POPULAR = ["Pindakaas", "Hagelslag melk", "Oude kaas", "Kroket", "Hollandse nieuwe haring", "Filet americain", "Appelstroop", "Brie"].map((n) => items.findIndex((it) => it.name === n));
+$("#popular").innerHTML = POPULAR.map((i) => `<span class="chip" data-open="${i}">${catDot(i)}${esc(items[i].name)}</span>`).join("");
+document.querySelectorAll(".n-items").forEach((el) => (el.textContent = N));
+combo($("#q"), openItem);
+let catFilter = null;
+
+function pairRow(i, v) {
+  const w = (Math.abs(v) / 10) * 50;
+  return `<div class="pair" data-open="${i}" title="Open ${esc(items[i].name)}">
+    <div class="name">${catDot(i)}<b>${esc(items[i].name)}</b><span>${esc(items[i].en)}</span></div>
+    <div class="bar"><i style="${v >= 0 ? "left:50%" : `left:${50 - w}%`};width:${w}%;background:${scoreColor(v)}"></i></div>
+    <div class="score" style="color:${v >= 4 ? "var(--good)" : v <= -4 ? "var(--bad)" : "var(--muted)"}">${fmt(v)}<span class="verdict">${verdict(v)}</span></div></div>`;
+}
+function renderSearch() {
+  const el = $("#detail");
+  if (current < 0) { el.innerHTML = ""; return; }
+  const i = current, it = items[i], st = G.stats[i], c = G.comm[i];
+  const others = d3.range(N).filter((j) => j !== i && (!catFilter || items[j].cat === catFilter)).sort((a, b) => S[i][b] - S[i][a]);
+  const degRank = d3.range(N).filter((j) => G.stats[j].degree > st.degree).length + 1;
+  el.innerHTML = `
+    <div class="card stack">
+      <div class="hero">
+        <div style="flex:1;min-width:220px">
+          <h2>${esc(it.name)}</h2>
+          <div class="muted">${esc(it.en)}</div>
+          <div class="chips" style="margin-top:10px">
+            <span class="chip">${dot(CAT[it.cat][1])}${CAT[it.cat][0]}</span>
+            <span class="chip" title="Cluster found by community detection">${dot(commColor(c))}${G.commSize[c] > 1 ? "Cluster: " + esc(G.commName[c]) : "No cluster (loner)"}</span>
+          </div>
+        </div>
+        <button class="btn" id="to-build">Build a sandwich with this →</button>
+      </div>
+      <div class="grid g4">
+        <div class="stat"><b>${st.degree}</b><span>good partners (≥ ${fmt(thr)}) · #${degRank} of ${N}</span></div>
+        <div class="stat"><b>${fmt(Math.round(st.mean * 10))}</b><span>average score with everything</span></div>
+        <div class="stat"><b>${Math.round(st.clustering * 100)}%</b><span>of its partners also like each other</span></div>
+        <div class="stat"><b>${st.open}</b><span>clashing pairs it still bridges</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <h3 style="margin:0">Everything, best match first</h3>
+        <div class="chips"><span class="chip ${catFilter ? "" : "on"}" data-cat="">All</span>${cats.map((k) => `<span class="chip ${catFilter === k ? "on" : ""}" data-cat="${k}">${dot(CAT[k][1])}${CAT[k][0]}</span>`).join("")}</div>
+      </div>
+      <div class="pairs">${others.map((j) => pairRow(j, S[i][j])).join("")}</div>
+    </div>`;
+  $("#to-build").onclick = () => { seeds = [i]; location.hash = "build"; };
+  el.querySelectorAll("[data-cat]").forEach((ch) => (ch.onclick = () => { catFilter = ch.dataset.cat || null; renderSearch(); }));
+}
+
+// ---------- Build tab ----------
+let seeds = [], size = 3;
+const BUTTER = new Set(d3.range(N).filter((i) => items[i].cat === "butter"));
+$("#size").innerHTML = [2, 3, 4, 5].map((n) => `<button data-n="${n}">${n}</button>`).join("");
+$("#size").onclick = (e) => { const b = e.target.closest("button"); if (b) { size = +b.dataset.n; renderBuild(); } };
+combo($("#bq"), (i) => { if (!seeds.includes(i)) seeds.push(i); renderBuild(); }, (i) => !seeds.includes(i));
+function renderBuild() {
+  if (seeds.length > size) size = Math.min(5, seeds.length);
+  $("#size").querySelectorAll("button").forEach((b) => b.classList.toggle("on", +b.dataset.n === size));
+  $("#seeds").innerHTML = seeds.map((i) => `<span class="chip on" data-rm="${i}">${catDot(i)}${esc(items[i].name)}<span class="x">✕</span></span>`).join("") || `<span class="muted small">nothing — surprise me</span>`;
+  $("#seeds").querySelectorAll("[data-rm]").forEach((ch) => (ch.onclick = () => { seeds = seeds.filter((s) => s !== +ch.dataset.rm); renderBuild(); }));
+  const res = seeds.length >= size ? [{ set: seeds, fit: Analysis.fit(S, seeds) }] : Analysis.suggest(S, items, seeds, size, 8, BUTTER);
+  $("#results").innerHTML = res.map(({ set, fit }, k) => {
+    const pairs = [];
+    for (let a = 0; a < set.length; a++) for (let b = a + 1; b < set.length; b++) pairs.push([set[a], set[b], S[set[a]][set[b]]]);
+    pairs.sort((p, q) => q[2] - p[2]);
+    return `<div class="card sandwich">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">${seeds.length >= size ? "Your sandwich" : "Suggestion " + (k + 1)}</h3><span class="score" style="color:${fit >= 0.4 ? "var(--good)" : fit <= -0.4 ? "var(--bad)" : "var(--muted)"}">${Math.round(fit * 100)}% harmony</span></div>
+      <div class="meter"><i style="width:${Math.max(0, fit) * 100}%"></i></div>
+      <div class="layers">${set.map((i) => `<span class="chip ${seeds.includes(i) ? "on" : ""}" data-open="${i}">${catDot(i)}${esc(items[i].name)}</span>`).join("")}</div>
+      <div class="mini">${pairs.map(([a, b, v]) => `<span>${esc(items[a].name)} × ${esc(items[b].name)}</span><b style="color:${scoreColor(v)}">${fmt(v)}</b>`).join("")}</div>
+    </div>`;
+  }).join("") || `<div class="empty">No combinations found.</div>`;
+}
+
+// ---------- shared threshold controls ----------
+document.querySelectorAll(".threshold-bar").forEach((bar) => {
+  bar.innerHTML = `<label>Counts as a good pairing at ≥ <input type="range" min="3" max="10" data-k="thr"><output></output></label>
+    <label>Counts as a clash at ≤ <input type="range" min="-10" max="-1" data-k="bad"><output></output></label>
+    <span class="muted small" data-summary></span>`;
+});
+function syncBars() {
+  document.querySelectorAll(".threshold-bar").forEach((bar) => {
+    bar.querySelectorAll("input").forEach((inp) => { inp.value = inp.dataset.k === "thr" ? thr : bad; inp.nextElementSibling.textContent = fmt(+inp.value); });
+    const edges = d3.sum(G.stats, (s) => s.degree) / 2;
+    bar.querySelector("[data-summary]").textContent = `${edges} good pairs · ${G.commSize.filter((s) => s > 1).length} clusters`;
+  });
+}
+document.querySelectorAll(".threshold-bar input").forEach((inp) => inp.addEventListener("input", () => {
+  if (inp.dataset.k === "thr") thr = +inp.value; else bad = +inp.value;
+  recompute(); syncBars(); render();
+}));
+
+// ---------- Network tab ----------
+const graph = { colorBy: "comm", t: null, hover: -1, pinned: -1, find: -1, links: [] };
+const radius = (i) => 3 + Math.sqrt(G.stats[i].degree) * 0.9;
+const nodeColor = (i) => (graph.colorBy === "comm" ? commColor(G.comm[i]) : CAT[items[i].cat][1]);
+function initGraph() {
+  const cv = $("#graph-canvas");
+  graph.nodes = d3.range(N).map((i) => ({ i }));
+  graph.sim = d3.forceSimulation(graph.nodes)
+    .force("charge", d3.forceManyBody().strength(-70).distanceMax(400))
+    .force("x", d3.forceX(0).strength(0.05)).force("y", d3.forceY(0).strength(0.05))
+    .force("collide", d3.forceCollide((d) => radius(d.i) + 1.5))
+    .on("tick", drawGraph)
+    .on("end", () => { // zoom to fit once, after the first layout settles
+      if (graph.fitted || tab !== "graph") return;
+      graph.fitted = true;
+      const [x0, x1] = d3.extent(graph.nodes, (n) => n.x), [y0, y1] = d3.extent(graph.nodes, (n) => n.y), w = cv.clientWidth, h = cv.clientHeight;
+      const k = Math.min(2, 0.9 * Math.min(w / (x1 - x0 + 40), h / (y1 - y0 + 40)));
+      d3.select(cv).transition().duration(700).call(graph.zoom.transform, d3.zoomIdentity.translate(w / 2, h / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2));
+    });
+  graph.zoom = d3.zoom().scaleExtent([0.2, 6]).on("zoom", (e) => { graph.t = e.transform; drawGraph(); });
+  d3.select(cv).call(graph.zoom).on("dblclick.zoom", null);
+  const at = (e) => {
+    const [x, y] = graph.t.invert(d3.pointer(e, cv));
+    const n = graph.sim.find(x, y, 14 / graph.t.k);
+    return n ? n.i : -1;
+  };
+  cv.addEventListener("mousemove", (e) => {
+    const i = at(e);
+    if (i !== graph.hover) { graph.hover = i; cv.style.cursor = i >= 0 ? "pointer" : "grab"; drawGraph(); }
+    tip(i >= 0 ? `<b>${esc(items[i].name)}</b><br>${esc(items[i].en)}<br>${G.stats[i].degree} good partners` : null, e);
+  });
+  cv.addEventListener("mouseleave", () => { graph.hover = -1; tip(null); drawGraph(); });
+  cv.addEventListener("click", (e) => { graph.pinned = at(e); graph.find = -1; drawGraph(); renderSide(); });
+  combo($("#gq"), (i) => {
+    graph.pinned = graph.find = i;
+    const n = graph.nodes[i], w = cv.clientWidth, h = cv.clientHeight;
+    d3.select(cv).transition().duration(600).call(graph.zoom.transform, d3.zoomIdentity.translate(w / 2, h / 2).scale(2).translate(-n.x, -n.y));
+    renderSide();
+  });
+  $("#colorby").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; graph.colorBy = b.dataset.v; $("#colorby").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); drawGraph(); legendGraph(); };
+}
+function sizeGraph() {
+  const cv = $("#graph-canvas"), dpr = devicePixelRatio || 1;
+  cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+  if (!graph.t) d3.select(cv).call(graph.zoom.transform, d3.zoomIdentity.translate(cv.clientWidth / 2, cv.clientHeight / 2).scale(0.8));
+}
+function updateGraphLinks() {
+  graph.links = [];
+  for (let a = 0; a < N; a++) for (const b of G.adj[a]) if (a < b) graph.links.push({ source: a, target: b, v: S[a][b] });
+  graph.sim.force("link", d3.forceLink(graph.links).distance(45).strength((l) => (0.6 * (l.v / 10)) / Math.sqrt(Math.min(G.stats[l.source.i ?? l.source].degree, G.stats[l.target.i ?? l.target].degree))));
+  graph.sim.alpha(0.7).restart();
+  graph.thr = thr;
+}
+function drawGraph() {
+  const cv = $("#graph-canvas"), ctx = cv.getContext("2d"), dpr = devicePixelRatio || 1, t = graph.t;
+  if (!t || tab !== "graph") return;
+  const focus = graph.hover >= 0 ? graph.hover : graph.pinned;
+  const near = focus >= 0 ? new Set([focus, ...G.adj[focus]]) : null;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.translate(t.x, t.y); ctx.scale(t.k, t.k);
+  const text = cssVar("--text"), muted = cssVar("--muted"), surface = cssVar("--surface");
+  ctx.lineWidth = 0.6 / t.k;
+  ctx.strokeStyle = muted; ctx.globalAlpha = near ? 0.04 : 0.12;
+  ctx.beginPath();
+  for (const l of graph.links) { ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y); }
+  ctx.stroke();
+  if (near) {
+    ctx.globalAlpha = 0.9; ctx.lineWidth = 1.4 / t.k;
+    for (const j of G.adj[focus]) { const a = graph.nodes[focus], b = graph.nodes[j]; ctx.strokeStyle = scoreColor(S[focus][j]); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  }
+  for (const n of graph.nodes) {
+    ctx.globalAlpha = near && !near.has(n.i) ? 0.15 : 1;
+    ctx.fillStyle = nodeColor(n.i);
+    ctx.beginPath(); ctx.arc(n.x, n.y, radius(n.i), 0, 2 * Math.PI); ctx.fill();
+    if (n.i === focus || n.i === graph.find) { ctx.lineWidth = 2.5 / t.k; ctx.strokeStyle = text; ctx.stroke(); }
+  }
+  // labels: hubs when idle, focus neighbourhood when hovering
+  const hubs = graph.hubs || (graph.hubs = d3.range(N).sort((a, b) => G.stats[b].degree - G.stats[a].degree).slice(0, 18));
+  const labelled = near ? [...near] : t.k > 1.6 ? d3.range(N) : hubs;
+  ctx.font = `600 ${11 / t.k}px Inter, system-ui, sans-serif`; ctx.textAlign = "center";
+  ctx.lineWidth = 3 / t.k; ctx.strokeStyle = surface; ctx.fillStyle = text; ctx.globalAlpha = 1;
+  for (const i of labelled) { const n = graph.nodes[i], y = n.y - radius(i) - 4 / t.k; ctx.strokeText(items[i].name, n.x, y); ctx.fillText(items[i].name, n.x, y); }
+}
+function renderSide() {
+  const el = $("#gside"), i = graph.pinned;
+  if (i < 0) { el.hidden = true; return; }
+  const top = G.adj[i].slice().sort((a, b) => S[i][b] - S[i][a]);
+  el.hidden = false;
+  el.innerHTML = `<div class="row" style="justify-content:space-between"><h3 style="margin:0">${esc(items[i].name)}</h3><button class="chip" id="gclose" aria-label="Close">✕</button></div>
+    <p class="muted small" style="margin:2px 0 10px">${esc(items[i].en)} · ${dot(commColor(G.comm[i]))} ${esc(G.commName[G.comm[i]] || "loner")}</p>
+    <div class="mini">${top.slice(0, 15).map((j) => `<span data-open="${j}" style="cursor:pointer">${esc(items[j].name)}</span><b style="color:${scoreColor(S[i][j])}">${fmt(S[i][j])}</b>`).join("") || "<span>No good partners at this threshold</span>"}</div>
+    <button class="btn ghost" style="margin-top:12px;width:100%" data-open="${i}">Open all pairings →</button>`;
+  $("#gclose").onclick = () => { graph.pinned = -1; renderSide(); drawGraph(); };
+}
+function legendGraph() {
+  $("#glegend").innerHTML = graph.colorBy === "cat"
+    ? cats.map((k) => `<span class="chip">${dot(CAT[k][1])}${CAT[k][0]}</span>`).join("")
+    : G.commSize.map((s, c) => (s > 1 ? `<span class="chip">${dot(commColor(c))}${esc(G.commName[c])} <span class="muted">${s}</span></span>` : "")).join("");
+}
+function renderGraph() {
+  if (!graph.sim) initGraph();
+  sizeGraph();
+  if (graph.thr !== thr) { graph.hubs = null; updateGraphLinks(); } else if (graph.sim.alpha() > graph.sim.alphaMin()) graph.sim.restart();
+  legendGraph(); renderSide(); drawGraph();
+}
+
+// ---------- Matrix tab ----------
+let morder = "comm";
+$("#morder").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; morder = b.dataset.v; $("#morder").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); renderMatrix(); };
+function renderMatrix() {
+  const group = (i) => (morder === "comm" ? G.comm[i] : cats.indexOf(items[i].cat));
+  const color = (i) => (morder === "comm" ? commColor(G.comm[i]) : CAT[items[i].cat][1]);
+  const order = d3.range(N).sort((a, b) => group(a) - group(b) || cats.indexOf(items[a].cat) - cats.indexOf(items[b].cat) || G.stats[b].degree - G.stats[a].degree);
+  const cv = $("#matrix-canvas"), dpr = devicePixelRatio || 1, band = 8;
+  const cell = Math.max(3, Math.floor((Math.min(cv.parentElement.clientWidth, 1100) - 40 - band) / N));
+  const W = band + N * cell;
+  cv.style.width = cv.style.height = W + "px"; cv.width = cv.height = W * dpr;
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  order.forEach((a, r) => {
+    ctx.fillStyle = color(a); ctx.fillRect(0, band + r * cell, band - 2, cell); ctx.fillRect(band + r * cell, 0, cell, band - 2);
+    order.forEach((b, c) => { ctx.fillStyle = a === b ? cssVar("--border") : scoreColor(S[a][b]); ctx.fillRect(band + c * cell, band + r * cell, cell, cell); });
+  });
+  ctx.strokeStyle = cssVar("--text"); ctx.globalAlpha = 0.35; ctx.lineWidth = 1;
+  order.forEach((a, r) => { if (r && group(a) !== group(order[r - 1])) { const p = band + r * cell; ctx.beginPath(); ctx.moveTo(band, p); ctx.lineTo(W, p); ctx.moveTo(p, band); ctx.lineTo(p, W); ctx.stroke(); } });
+  ctx.globalAlpha = 1;
+  const at = (e) => { const r = cv.getBoundingClientRect(), x = Math.floor((e.clientX - r.left - band) / cell), y = Math.floor((e.clientY - r.top - band) / cell); return x >= 0 && y >= 0 && x < N && y < N ? [order[y], order[x]] : null; };
+  cv.onmousemove = (e) => { const p = at(e); tip(p && p[0] !== p[1] ? `<b>${esc(items[p[0]].name)}</b> × <b>${esc(items[p[1]].name)}</b><br><span style="font-size:18px;font-weight:700">${fmt(S[p[0]][p[1]])}</span> ${verdict(S[p[0]][p[1]])}` : null, e); };
+  cv.onmouseleave = () => tip(null);
+  cv.onclick = (e) => { const p = at(e); if (p) { tip(null); openItem(p[0]); } };
+  cv.style.cursor = "crosshair";
+  $("#mlegend").innerHTML = morder === "cat"
+    ? cats.map((k) => `<span class="chip">${dot(CAT[k][1])}${CAT[k][0]}</span>`).join("")
+    : G.commSize.map((s, c) => (s > 1 ? `<span class="chip">${dot(commColor(c))}${esc(G.commName[c])}</span>` : "")).join("") + `<span class="chip">${dot("#adb5bd")}Loners</span>`;
+}
+function tip(html, e) {
+  const t = $("#tip");
+  if (!html) return t.classList.remove("on");
+  t.innerHTML = html; t.classList.add("on");
+  const x = Math.min(e.clientX + 14, innerWidth - t.offsetWidth - 8), y = e.clientY + 14 + t.offsetHeight > innerHeight ? e.clientY - t.offsetHeight - 10 : e.clientY + 14;
+  t.style.left = x + "px"; t.style.top = y + "px";
+}
+
+// ---------- Insights tab ----------
+let sortKey = "degree", sortDir = -1;
+const name = (i) => `<span class="chip" data-open="${i}">${catDot(i)}${esc(items[i].name)}</span>`;
+function renderInsights() {
+  const { stats, comm, commSize, comps, bridges } = G;
+  const clusters = commSize.map((s, c) => c).filter((c) => commSize[c] > 1);
+  const loners = d3.range(N).filter((i) => stats[i].degree === 0);
+  const compSize = d3.rollup(d3.range(N), (v) => v.length, (i) => comps.comp[i]);
+  const islands = [...compSize].filter(([, s]) => s > 1).sort((a, b) => b[1] - a[1]);
+  const edges = d3.sum(stats, (s) => s.degree) / 2;
+
+  // cluster x cluster mean score
+  const members = clusters.map((c) => d3.range(N).filter((i) => comm[i] === c));
+  const between = (A, B) => d3.mean(A.flatMap((a) => B.filter((b) => b !== a).map((b) => S[a][b])));
+  const shown = clusters.slice(0, 12);
+
+  // islands: name the small ones
+  const islandHtml = islands.map(([id, s], k) => {
+    const m = d3.range(N).filter((i) => comps.comp[i] === id).sort((a, b) => stats[b].degree - stats[a].degree);
+    return `<div style="margin-bottom:10px"><b>${k === 0 ? "Main island" : "Island " + (k + 1)}</b> <span class="muted">· ${s} toppings</span><div class="chips" style="margin-top:6px">${(k === 0 ? m.slice(0, 12) : m).map(name).join("")}${k === 0 && s > 12 ? `<span class="muted small">+${s - 12} more</span>` : ""}</div></div>`;
+  }).join("");
+
+  // load-bearing toppings: which pieces fall off when removed
+  const bridgeHtml = bridges.map(([i, extra]) => {
+    const c2 = Analysis.components(G.adj, i).comp;
+    const pieces = d3.groups(G.adj[i], (j) => c2[j]).map(([cid]) => d3.range(N).filter((x) => c2[x] === cid)).sort((a, b) => b.length - a.length).slice(1);
+    return { i, extra, cut: pieces.flat() };
+  }).sort((a, b) => b.cut.length - a.cut.length).slice(0, 12)
+    .map(({ i, cut }) => `<div class="triple" style="margin-bottom:8px">${name(i)}<span class="muted">holds on</span>${cut.slice(0, 6).map(name).join("")}${cut.length > 6 ? `<span class="muted">+${cut.length - 6}</span>` : ""}</div>`).join("");
+
+  const brokers = d3.range(N).filter((i) => stats[i].open).sort((a, b) => stats[b].open - stats[a].open).slice(0, 10);
+  const rows = d3.range(N).sort((a, b) => sortDir * (sortKey === "name" ? items[a].name.localeCompare(items[b].name) : stats[a][sortKey] - stats[b][sortKey]) || items[a].name.localeCompare(items[b].name));
+  const cols = [["name", "Topping"], ["degree", "Good partners"], ["strength", "Pairing strength"], ["mean", "Avg score"], ["clustering", "Partners like each other"], ["open", "Clashes bridged"]];
+
+  $("#insights").innerHTML = `
+    <div class="grid g4">
+      <div class="stat card"><b>${edges}</b><span>good pairs out of ${(N * (N - 1)) / 2}</span></div>
+      <div class="stat card"><b>${clusters.length}</b><span>clusters of toppings that belong together</span></div>
+      <div class="stat card"><b>${islands.length}</b><span>separate island${islands.length === 1 ? "" : "s"} with no good pairing between them</span></div>
+      <div class="stat card"><b>${loners.length}</b><span>loners with no good partner at all</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Clusters</h2>
+      <p class="muted small">Community detection (Louvain) groups toppings that pair well with each other more than with the rest. The grid shows the average score <i>between</i> clusters — the diagonal is how well a cluster sticks together, red cells are clusters that clash.</p>
+      <div class="grid g2" style="margin-top:14px">
+        ${clusters.map((c, k) => `<div class="cluster" style="border-color:${commColor(c)}"><h3>${esc(commName(c))} <span class="muted">· ${commSize[c]}</span></h3><div class="chips">${members[k].sort((a, b) => stats[b].degree - stats[a].degree).slice(0, 14).map(name).join("")}${commSize[c] > 14 ? `<span class="muted small">+${commSize[c] - 14} more</span>` : ""}</div></div>`).join("")}
+      </div>
+      <div style="overflow:auto;margin-top:18px"><table class="cm">
+        <tr><th></th>${shown.map((c, k) => `<th title="${esc(commName(c))}">${dot(commColor(c))} ${k + 1}</th>`).join("")}</tr>
+        ${shown.map((c, r) => `<tr><th style="text-align:left;white-space:nowrap">${dot(commColor(c))} ${r + 1}. ${esc(commName(c))}</th>${shown.map((_, k) => { const v = between(members[r], members[k]); return `<td style="background:${scoreColor(Math.round(v))}">${fmt(Math.round(v))}</td>`; }).join("")}</tr>`).join("")}
+      </table></div>
+    </div>
+
+    <div class="grid g2">
+      <div class="card">
+        <h2>Islands</h2>
+        <p class="muted small">Groups with <i>no</i> good pairing to the rest of the world at the current threshold. Raise the threshold to watch the network break apart.</p>
+        ${islandHtml || `<div class="empty">No pairs reach this threshold.</div>`}
+        ${loners.length ? `<div><b>Loners</b> <span class="muted">· nothing scores ≥ ${fmt(thr)} with them</span><div class="chips" style="margin-top:6px">${loners.map(name).join("")}</div></div>` : ""}
+      </div>
+      <div class="card">
+        <h2>Load-bearing toppings</h2>
+        <p class="muted small">Remove one of these and part of the network loses its only connection to the rest. They are the single link holding a niche on the map.</p>
+        ${bridgeHtml || `<div class="empty">None — every island stays connected when any single topping is removed.</div>`}
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Matchmakers</h2>
+      <p class="muted small">Toppings B where <b>A goes with B</b> and <b>B goes with C</b>, but <b>A and C clash</b> (≤ ${fmt(bad)}). These are the universal donors of the sandwich: they get along with both sides of a feud.</p>
+      <table style="margin-top:10px"><thead><tr><th>Topping (B)</th><th class="num">Clashing pairs bridged</th><th>Worst example</th></tr></thead><tbody>
+        ${brokers.map((i) => { const [a, c, v] = stats[i].examples[0]; return `<tr data-open="${i}"><td>${catDot(i)} <b>${esc(items[i].name)}</b></td><td class="num">${stats[i].open}</td><td><div class="triple">${esc(items[a].name)} <span class="ok">✓</span> <b>${esc(items[i].name)}</b> <span class="ok">✓</span> ${esc(items[c].name)} <span class="muted">but</span> <span class="no">${esc(items[a].name)} × ${esc(items[c].name)} ${fmt(v)}</span></div></td></tr>`; }).join("") || `<tr><td colspan="3" class="empty">No matchmakers at these thresholds.</td></tr>`}
+      </tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>How connected is each topping?</h2>
+      <p class="muted small"><b>Good partners</b>: how many toppings it pairs well with. <b>Pairing strength</b>: the sum of those scores. <b>Avg score</b>: its average with everything (versatility). <b>Partners like each other</b>: share of its partners that also pair well with one another (high = a tight niche, low = a connector). Click a column to sort, a row to open it.</p>
+      <div class="tablewrap" style="margin-top:10px"><table id="ctable"><thead><tr>${cols.map(([k, l]) => `<th data-k="${k}" class="${k === "name" ? "" : "num"} ${k === sortKey ? "sorted" : ""}">${l}${k === sortKey ? (sortDir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead><tbody>
+        ${rows.map((i) => { const s = stats[i]; return `<tr data-open="${i}"><td>${catDot(i)} ${esc(items[i].name)}</td><td class="num">${s.degree}</td><td class="num">${s.strength.toFixed(1)}</td><td class="num">${fmt(Math.round(s.mean * 10))}</td><td class="num">${Math.round(s.clustering * 100)}%</td><td class="num">${s.open}</td></tr>`; }).join("")}
+      </tbody></table></div>
+    </div>`;
+  $("#ctable thead").onclick = (e) => { const th = e.target.closest("th"); if (!th) return; const k = th.dataset.k; sortDir = k === sortKey ? -sortDir : k === "name" ? 1 : -1; sortKey = k; renderInsights(); };
+}
+const commName = (c) => G.commName[c];
+
+// ---------- boot ----------
+const savedTheme = (() => { try { return localStorage.getItem("theme"); } catch { return null; } })();
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+$("#theme").onclick = () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("theme", document.documentElement.dataset.theme); } catch {}
+  buildPalette(); render();
+};
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { buildPalette(); render(); });
+let rz;
+addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => (tab === "matrix" || tab === "graph") && render(), 120); });
+buildPalette();
+recompute();
+syncBars();
+if (!location.hash) current = POPULAR[0];
+route();
+</script>
+</body>
+</html>

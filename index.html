@@ -381,7 +381,7 @@ function pairRow(i, v, ok = true) {
   return `<div class="pair" data-open="${i}" title="Open ${esc(items[i].name)}">
     <div class="name">${catDot(i)}<b>${esc(items[i].name)}</b><span>${esc(items[i].en)}</span></div>
     <div class="bar"><i style="${v >= 0 ? "left:50%" : `left:${50 - w}%`};width:${w}%;background:${scoreColor(v)}"></i></div>
-    <div class="score" style="color:${v >= 4 ? "var(--good)" : v <= -4 ? "var(--bad)" : "var(--muted)"}" title="${ok ? "Hand-checked pair" : "Estimated by the flavour model"}">${ok ? "" : "≈ "}${fmt(v)}<span class="verdict">${verdict(v)}</span></div></div>`;
+    <div class="score" style="color:${v >= 4 ? "var(--good)" : v <= -4 ? "var(--bad)" : "var(--muted)"}" title="${ok ? "Hand-checked pair" : "Estimated from flavour profiles and recipe data"}">${ok ? "" : "≈ "}${fmt(v)}<span class="verdict">${verdict(v)}</span></div></div>`;
 }
 function renderSearch() {
   const el = $("#detail");
@@ -416,7 +416,7 @@ function renderSearch() {
         <h3 style="margin:0">Everything, best match first</h3>
         <div class="chips"><span class="chip ${catFilter ? "" : "on"}" data-cat="">All</span>${cats.map((k) => `<span class="chip ${catFilter === k ? "on" : ""}" data-cat="${k}">${dot(CAT[k][1])}${CAT[k][0]}</span>`).join("")}</div>
       </div>
-      <p class="muted small" style="margin:0 0 8px">≈ marks a score estimated by the flavour model; the rest were checked by hand.</p>
+      <p class="muted small" style="margin:0 0 8px">≈ marks a score estimated from flavour profiles and recipe data; the rest were checked by hand.</p>
       <div class="pairs">${others.map((j) => pairRow(j, S[i][j], sure(i, j))).join("")}</div>
     </div>`;
   $("#to-build").onclick = () => { seeds = [i]; nevers = nevers.filter((x) => x !== i); swapOpen = surprise = null; location.hash = "build"; };
@@ -533,7 +533,7 @@ function sandwichCard({ set, score, harmony, penalties, weakest, pairs, classic,
     <div class="layers">${set.map((i, k) => `<span class="chip ${seeds.includes(i) ? "on" : ""} ${k === open ? "sel" : ""}" data-swap="${k}" title="Swap ${esc(items[i].name)}">${catDot(i)}${esc(items[i].name)} <span class="x">⇄</span></span>`).join("")}</div>
     ${swap}
     ${why.length ? `<div class="why">${why.join("")}</div>` : ""}
-    <div class="mini">${sorted.map(([a, b, v, ok]) => `<span>${esc(items[a].name)} × ${esc(items[b].name)}</span><b style="color:${scoreColor(v)}" title="${ok ? "Hand-checked pair" : "Estimated by the flavour model"}">${ok ? "" : "≈ "}${fmt(v)}</b>`).join("")}</div>
+    <div class="mini">${sorted.map(([a, b, v, ok]) => `<span>${esc(items[a].name)} × ${esc(items[b].name)}</span><b style="color:${scoreColor(v)}" title="${ok ? "Hand-checked pair" : "Estimated from flavour profiles and recipe data"}">${ok ? "" : "≈ "}${fmt(v)}</b>`).join("")}</div>
     <div class="card-actions">${key === "s" ? `<button class="btn ghost small" data-again>Again</button>` : ""}${mine ? "" : `<button class="btn ghost small" data-use>Make it mine</button>`}<button class="btn ghost small" data-copy>Copy link</button></div>
   </div>`;
 }
@@ -548,7 +548,7 @@ function renderBuild() {
   $("#strict").checked = strict;
   const key = [seeds, nevers, size, strict].join("|");
   const res = mine ? [{ set: seeds, ...Analysis.explain(E, seeds) }] : (resCache[key] ||= Analysis.suggest(E, seeds, size, engineOpts()));
-  $("#results").innerHTML = res.map((r, k) => sandwichCard(r, mine ? "Your sandwich" : "Suggestion " + (k + 1), "r" + k, { mine })).join("") || `<div class="empty">No combinations found. Try leaving fewer toppings out.</div>`;
+  $("#results").innerHTML = res.map((r, k) => sandwichCard(r, mine ? "Your sandwich" : "Suggestion " + (k + 1), "r" + k, { mine })).join("") || `<div class="empty">${strict ? "No combinations where every pair is proven. Turn off <b>Proven pairs only</b> to include estimates." : "No combinations found. Try leaving fewer toppings out."}</div>`;
   const so = $("#surprise-out");
   so.hidden = !surprise;
   so.innerHTML = surprise ? sandwichCard({ set: surprise, ...Analysis.explain(E, surprise) }, "🎲 Surprise", "s", { cls: "surprise-card" }) : "";

@@ -1,11 +1,15 @@
 """Generates data.js: Dutch sandwich toppings and a pairwise pairing score in [-1, 1].
 
-Scores come from three layers:
+Scores come from four layers:
   1. rules: a category-pair base table plus tag rules (the coarse "sweet vs savoury" structure);
-  2. a flavour model: ridge regression on the toppings' taste profiles (flavours.py) and the rule score,
-     trained on every hand-set pair, which fills in the pairs nobody scored by hand;
-  3. hand-set scores (OVERRIDES and flavours.CLASHES), which always win.
-Run: python3 build.py            (writes data.js and prints the model's cross-validation report)
+  2. recipe evidence: how often two toppings share a sandwich recipe in RecipeNLG and the Dutch
+     recipes in flavours.py, versus chance (evidence.py, from recipe_counts.json);
+  3. two learned models, averaged: ridge regression on the toppings' taste profiles (flavours.py) with the
+     recipe evidence blended in, and a small neural network (pairnet.py) trained on hand-set scores,
+     recipe evidence and the rules. They fill in the pairs nobody scored by hand, never above +0.8;
+  4. hand-set scores (OVERRIDES, flavours.CLASHES, pairs inside flavours.CLASSICS), which always win.
+Run: .venv/bin/python build.py      (needs numpy and torch; see requirements.txt)
+     .venv/bin/python pairnet.py    (cross-validation of all the models, a few minutes)
 """
 import json
 
@@ -317,23 +321,26 @@ BASE = {
 }
 
 # (selector, selector, delta); selector "c:x" = category, "t:x" = tag. Applied once per matching pair.
+# Reviewed against the hand-set pairs and recipe evidence (RecipeNLG + Dutch recipes): rules the data
+# clearly contradicted (12+ supporting pairs, off by 0.15+) were moved to the fitted value, e.g.
+# strong cheese with jam -0.3 -> +0.2, fishy with cheese -0.4 -> -0.6, mayo on mayo -0.4 -> -0.1.
 RULES = [
     ("t:savoury", "c:sweet", -1.3), ("t:savoury", "c:jam", -1.2), ("t:savoury", "c:nut", -0.6), ("t:savoury", "c:fruit", -0.7),
     ("t:garlic", "c:sweet", -0.4), ("t:garlic", "c:jam", -0.5), ("t:garlic", "c:fruit", -0.4), ("t:garlic", "c:nut", -0.3),
     ("t:herb", "c:sweet", -0.2), ("t:herb", "c:jam", -0.2),
     ("t:sprinkle", "c:butter", 0.2), ("t:sprinkle", "t:sprinkle", -0.4), ("t:anise", "c:nut", -0.3),
-    ("t:choc", "c:fruit", 0.3), ("t:choc", "t:choc", -0.3), ("t:choc", "c:jam", -0.2),
-    ("t:mild", "c:jam", 0.4), ("t:strong", "c:jam", -0.3),
-    ("t:goat", "c:jam", 0.5), ("t:soft", "c:jam", 0.5), ("t:blue", "c:jam", 0.5),
+    ("t:choc", "c:fruit", 0.3), ("t:choc", "t:choc", -0.3), ("t:choc", "c:jam", 0.1),
+    ("t:mild", "c:jam", 0.1), ("t:strong", "c:jam", 0.2),
+    ("t:goat", "c:jam", 0.5), ("t:soft", "c:jam", 0.5), ("t:blue", "c:jam", 0.4),
     ("t:goat", "c:fruit", 0.4), ("t:soft", "c:fruit", 0.4), ("t:blue", "c:fruit", 0.4),
     ("t:goat", "t:nutty", 0.5), ("t:soft", "t:nutty", 0.5), ("t:blue", "t:nutty", 0.5),
-    ("t:stroop", "c:cheese", 0.7),
-    ("t:ham", "t:mild", 0.3), ("t:ham", "c:egg", 0.3), ("t:ham", "t:mustard", 0.2),
+    ("t:stroop", "c:cheese", 0.2),
+    ("t:ham", "t:mild", 0.3), ("t:ham", "c:egg", 0.3), ("t:ham", "t:mustard", -0.1),
     ("t:mustard", "c:meat", 0.3), ("t:mustard", "c:hot", 0.2), ("t:mustard", "t:strong", 0.4),
-    ("t:fishy", "c:cheese", -0.4), ("t:fishy", "t:onion", 0.3), ("t:fishy", "t:herb", 0.2), ("t:fishy", "t:pickled", 0.2),
-    ("t:mayo", "t:mayo", -0.4), ("t:creamy", "t:creamy", -0.2), ("t:fried", "t:fried", -0.3),
+    ("t:fishy", "c:cheese", -0.6), ("t:fishy", "t:onion", 0.3), ("t:fishy", "t:herb", 0.2), ("t:fishy", "t:pickled", 0.2),
+    ("t:mayo", "t:mayo", -0.1), ("t:creamy", "t:creamy", -0.2), ("t:fried", "t:fried", -0.3),
     ("t:italian", "t:italian", 0.4), ("t:asian", "t:asian", 0.3), ("t:asian", "t:peanut", 0.5),
-    ("t:liver", "c:cheese", -0.4), ("t:pickled", "c:meat", 0.2), ("t:sesame", "c:veg", 0.6),
+    ("t:liver", "c:cheese", -0.4), ("t:pickled", "c:meat", 0.2), ("t:sesame", "c:veg", 0.3),
     ("t:nutty", "c:sweet", 0.3),
 ]
 
@@ -521,6 +528,8 @@ OVERRIDES = [
     ("Schapenkaas", ["Vijgenjam", "Honing"], 0.9), ("Schapenkaas", ["Walnoten", "Peer"], 0.7), ("Schapenkaas", CURED_HAM, 0.6),
     ("Belegen geitenkaas", ["Honing", "Uienchutney"], 0.9), ("Belegen geitenkaas", ["Vijgenjam", "Walnoten"], 0.8),
     ("Belegen geitenkaas", ["Rode biet", "Appel"], 0.7), ("Belegen geitenkaas", "Rucola", 0.6),
+    (["Gorgonzola", "Blauwe kaas"], ["Aardbeienjam", "Frambozenjam", "Kersenjam", "Abrikozenjam"], 0.8),
+    (["Gorgonzola", "Blauwe kaas"], ["Aardbeien", "Frambozen", "Druiven"], 0.7),
     ("Gorgonzola", "Peer", 1.0), ("Gorgonzola", ["Walnoten", "Honing", "Vijgenjam"], 0.9), ("Gorgonzola", ["Rucola", "Parmaham", "Hazelnoten"], 0.6),
     ("Ricotta", "Honing", 0.9), ("Ricotta", ["Vijgen", "Perzik"], 0.8), ("Ricotta", ["Aardbeien", "Frambozen", "Groene pesto"], 0.7),
     ("Ricotta", ["Spinazie", "Tomaat", "Rauwe ham"], 0.6),
@@ -631,13 +640,15 @@ def rule_matrix(items):
 CLASSIC_PAIR = 0.7
 
 
-def hand_set(items):
-    """Every hand-set pair: OVERRIDES, then CLASHES, then pairs from CLASSICS. Returns {(i, j): value} with i < j."""
+def hand_set(items, groups=None):
+    """Every hand-set pair: OVERRIDES, then CLASHES, then pairs from CLASSICS. Returns {(i, j): value} with i < j.
+    If `groups` is a dict, it is filled with the source line of each pair (for honest cross-validation)."""
     idx = {it["name"]: i for i, it in enumerate(items)}
     as_list = lambda v: v if isinstance(v, list) else [v]
     labels, source = {}, {}
+    groups = {} if groups is None else groups
     for kind, table in (("override", OVERRIDES), ("clash", CLASHES)):
-        for xs, ys, v in table:
+        for line, (xs, ys, v) in enumerate(table):
             for x in as_list(xs):
                 for y in as_list(ys):
                     assert x in idx and y in idx, (x, y)
@@ -648,6 +659,7 @@ def hand_set(items):
                         print(f"  note: clash {x} × {y} = {v} disagrees with override {labels[key]}; keeping the override")
                         continue
                     labels[key], source[key] = v, kind
+                    groups[key] = f"{kind}:{line}"
     # every pair inside a classic sandwich works, at least in that company: e.g. honey with rocket on a brie roll
     for name, members in CLASSICS:
         for x in members:
@@ -658,6 +670,7 @@ def hand_set(items):
                         print(f"  note: {name} has {x} × {y}, which is listed as a clash; keeping the clash")
                     elif labels.get(key, -1) < CLASSIC_PAIR:
                         labels[key], source[key] = CLASSIC_PAIR, "classic"
+                        groups[key] = f"classic:{name}"
     return labels
 
 
@@ -703,7 +716,7 @@ def predict(w, X):
     return X @ w[:-1] + w[-1]
 
 
-def learn(items, R, labels, folds=5, seed=7, anchor=0.005, anchor_clash=0.3, lam=3.0, max_shift=0.6, cap=0.8, verbose=True):
+def learn(items, R, labels, folds=5, seed=7, anchor=0.005, anchor_clash=0.3, lam=3.0, max_shift=0.6, cap=0.8, verbose=True, evidence=None):
     """Learn corrections to the rule score from flavour profiles.
 
     The model predicts label - rule. Hand-set pairs are the evidence; every other pair is anchored to
@@ -727,6 +740,13 @@ def learn(items, R, labels, folds=5, seed=7, anchor=0.005, anchor_clash=0.3, lam
     Xa = F[iu][sel]
     # clear clashes by the rules (sweet against savoury) are held firmly; everything else loosely
     ya, wa = np.zeros(len(Xa)), np.where(R[iu][sel] <= -0.8, anchor_clash, anchor)
+    if evidence:
+        # recipe evidence (score-scale target, weight) replaces the anchor for the pairs it covers
+        free_keys = list(zip(iu[0][sel], iu[1][sel]))
+        for q, k in enumerate(free_keys):
+            if k in evidence:
+                t, wt = evidence[k]
+                ya[q], wa[q] = t - R[k], wt
 
     def fit(mask):
         return ridge(np.vstack([X[mask], Xa]), np.concatenate([y[mask] - r[mask], ya]), lam, np.concatenate([np.ones(mask.sum()), wa]))
@@ -750,6 +770,26 @@ def learn(items, R, labels, folds=5, seed=7, anchor=0.005, anchor_clash=0.3, lam
     return estimate(R, predict(w, F.reshape(-1, F.shape[-1])).reshape(R.shape))
 
 
+RECIPE_BLEND = 0.7  # how far recipe evidence pulls the ridge estimate, times the evidence's confidence
+NET_SHARE = 0.5     # share of the neural network in the final estimate (cross-validated: 50/50 is best)
+
+
+def blend_models(items, R, labels, M, cap=0.8):
+    """Average the ridge estimate (with recipe evidence blended in) and the neural network."""
+    import evidence
+    import pairnet
+
+    E = evidence.recipe_evidence(items)
+    to_score = pairnet.calibrate(E, labels)
+    ridge = M.copy()
+    for (i, j), (pmi, conf) in E.items():
+        a = RECIPE_BLEND * conf
+        ridge[i, j] = ridge[j, i] = (1 - a) * M[i, j] + a * to_score(pmi)
+    net, _ = pairnet.train(items, R, labels, E, use_rule=False, seeds=3, steps=1500)
+    print(f"  recipe evidence for {len(E)} pairs; neural network trained (3 seeds)")
+    return np.clip(NET_SHARE * net + (1 - NET_SHARE) * ridge, -1, cap)
+
+
 def build():
     items = parse_items()
     idx = {it["name"]: i for i, it in enumerate(items)}
@@ -758,6 +798,7 @@ def build():
     labels = hand_set(items)
     M = learn(items, R, labels)
     M = (M + M.T) / 2
+    M = blend_models(items, R, labels, M)
     known = np.zeros((n, n), bool)
     for (i, j), v in labels.items():
         M[i, j] = M[j, i] = v

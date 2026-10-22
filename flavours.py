@@ -385,3 +385,379 @@ CLASSICS = [
     ("Speculaas op brood", ["Speculaas"]),
     ("Kaneel & appel", ["Appel", "Kaneelsuiker"]),
 ]
+
+# Everyday Dutch sandwiches, added to the recipe corpus (RecipeNLG barely knows hagelslag or kroket).
+# Each line is one "recipe": the toppings that go on it together.
+DUTCH_RECIPES = """
+Roomboter, Hagelslag melk
+Roomboter, Hagelslag puur
+Roomboter, Hagelslag wit
+Roomboter, Chocoladevlokken melk
+Roomboter, Chocoladevlokken puur
+Roomboter, Vruchtenhagel
+Roomboter, Anijshagel
+Roomboter, Roze muisjes
+Roomboter, Blauwe muisjes
+Roomboter, Gestampte muisjes
+Roomboter, Kokosbrood
+Roomboter, Ontbijtkoek
+Roomboter, Speculaas
+Roomboter, Bruine basterdsuiker
+Roomboter, Kristalsuiker
+Roomboter, Kaneelsuiker
+Roomboter, Appelstroop
+Roomboter, Perenstroop
+Roomboter, Honing
+Roomboter, Aardbeienjam
+Roomboter, Frambozenjam
+Roomboter, Abrikozenjam
+Roomboter, Sinaasappelmarmelade
+Roomboter, Chocoladepasta
+Margarine, Hazelnootpasta
+Halvarine, Jonge kaas
+Roomboter, Jonge kaas
+Roomboter, Belegen kaas
+Roomboter, Oude kaas
+Roomboter, Gekookte ham
+Roomboter, Boterhamworst
+Roomboter, Cervelaat
+Roomboter, Leverworst
+Pindakaas, Hagelslag melk
+Pindakaas, Chocoladepasta
+Pindakaas, Banaan
+Pindakaas, Aardbeienjam
+Pindakaas, Honing
+Pindakaas, Sambal oelek
+Pindakaas, Sambal oelek, Komkommer
+Pindakaas met stukjes, Banaan, Honing
+Hazelnootpasta, Banaan
+Aardbeien, Kristalsuiker, Roomboter
+Aardbeien, Hagelslag melk
+Appel, Kaneelsuiker, Roomboter
+Banaan, Hagelslag melk
+Oude kaas, Appelstroop
+Old Amsterdam, Appelstroop
+Belegen kaas, Appelstroop
+Jonge kaas, Komkommer
+Belegen kaas, Tomaat
+Oude kaas, Zaanse mosterd
+Komijnekaas, Zaanse mosterd
+Oude kaas, Augurk, Zaanse mosterd
+Gekookte ham, Jonge kaas
+Gekookte ham, Jonge kaas, Roomboter
+Gekookte ham, Jonge kaas, Ananas
+Gekookte ham, Jonge kaas, Tomaat, Sla
+Gekookte ham, Gekookt ei, Bieslook
+Achterham, Zaanse mosterd
+Beenham, Honingmosterdsaus
+Beenham, Grove mosterd, Belegen kaas
+Rookvlees, Gekookt ei
+Rookvlees, Zaanse mosterd
+Paardenrookvlees, Rauwe ui
+Boterhamworst, Zaanse mosterd
+Leverworst, Zaanse mosterd
+Leverworst, Appelstroop
+Leverworst, Augurk
+Hamworst, Zaanse mosterd
+Pekelvlees, Zaanse mosterd, Augurk
+Gebraden gehakt, Zaanse mosterd
+Gebraden gehakt, Augurk
+Gelderse rookworst, Zaanse mosterd
+Katenspek, Zaanse mosterd
+Katenspek, Jonge kaas
+Katenspek, Gebakken ei
+Zult, Zaanse mosterd
+Metworst, Zaanse mosterd
+Droge worst, Oude kaas
+Ossenworst, Augurk, Zilveruitjes
+Ossenworst, Rauwe ui, Zaanse mosterd
+Filet americain, Rauwe ui
+Filet americain, Augurk, Rauwe ui, Gekookt ei
+Filet americain, Gekookt ei, Kappertjes
+Kipfilet, Sla, Tomaat, Mayonaise
+Kip-kerriesalade, Sla
+Kip-kerriesalade, Ananas
+Huzarensalade, Augurk
+Rundvleessalade, Gekookt ei, Augurk
+Eiersalade, Tuinkers
+Eiersalade, Bieslook
+Ham-preisalade, Sla
+Tonijnsalade, Rode ui
+Zalmsalade, Komkommer
+Krabsalade, Sla
+Garnalensalade, Sla
+Roomkaas naturel, Gerookte zalm
+Roomkaas naturel, Komkommer
+Smeerkaas, Komkommer
+Gebakken ei, Jonge kaas
+Gebakken ei, Gekookte ham, Jonge kaas
+Gebakken ei, Rosbief
+Gebakken ei, Ontbijtspek
+Gebakken ei, Ontbijtspek, Jonge kaas
+Roerei, Ontbijtspek
+Roerei, Gerookte zalm, Bieslook
+Jonge kaas, Gekookte ham, Gekookt ei, Sla, Tomaat, Komkommer
+Hollandse nieuwe haring, Rauwe ui
+Hollandse nieuwe haring, Augurk
+Hollandse nieuwe haring, Rauwe ui, Augurk
+Zure haring, Rauwe ui, Augurk
+Rolmops, Augurk, Rauwe ui
+Gerookte makreel, Rode ui
+Gerookte paling, Roomboter
+Gerookte paling, Roerei
+Hollandse garnalen, Cocktailsaus
+Hollandse garnalen, Gekookt ei, Bieslook
+Kibbeling, Remouladesaus
+Kibbeling, Knoflooksaus
+Lekkerbek, Tartaarsaus
+Lekkerbek, Remouladesaus, Sla
+Gerookte zalm, Rode ui, Kappertjes
+Gerookte zalm, Avocado
+Tonijn, Rode ui, Mayonaise
+Kroket, Zaanse mosterd
+Kroket, Roomboter, Zaanse mosterd
+Bitterballen, Zaanse mosterd
+Frikandel, Curry, Mayonaise, Rauwe ui
+Frikandel, Mayonaise
+Frikandel, Curry
+Gehaktbal, Zaanse mosterd
+Gehaktbal, Satésaus
+Kipcorn, Mayonaise
+Kipcorn, Curry
+Kaassoufflé, Mayonaise
+Garnalenkroket, Cocktailsaus
+Shoarma, Knoflooksaus, Sambal oelek, Sla
+Shoarma, Knoflooksaus, Rauwe ui
+Kipsaté, Satésaus, Gebakken uitjes
+Kipsaté, Satésaus, Kroepoek
+Speklap, Zaanse mosterd
+Hamburger, Ketchup, Augurk
+Hamburger, Cheddar, Augurk, Rode ui
+Brie, Honing, Walnoten
+Brie, Vijgenjam, Walnoten
+Geitenkaas zacht, Honing, Walnoten, Rucola
+Geitenkaas zacht, Rode biet, Walnoten
+Carpaccio, Parmezaan, Rucola, Pijnboompitten, Truffelmayonaise
+Mozzarella, Tomaat, Groene pesto
+Mozzarella, Tomaat, Basilicum
+Gerookte kipfilet, Avocado, Sla
+Gerookte kipfilet, Honingmosterdsaus, Rucola
+Rosbief, Truffelmayonaise, Rucola, Parmezaan
+Rosbief, Mierikswortelsaus, Rucola
+Pastrami, Augurk, Grove mosterd
+Hummus naturel, Komkommer
+Hummus naturel, Gegrilde paprika, Rucola
+Tonijnsalade, Kappertjes, Rode ui
+Old Amsterdam, Grove mosterd
+Jonge geitenkaas, Honing
+Roomkaas kruiden-knoflook, Komkommer
+Gekookt ei, Mayonaise, Tuinkers
+Avocado, Gekookt ei
+"""
+
+# English ingredient names (as RecipeNLG writes them) for each topping. The longest matching name wins,
+# so "peanut butter" is Pindakaas, not Roomboter. Toppings without a line are Dutch-only.
+ALIASES = """
+Roomboter: butter; unsalted butter; salted butter; softened butter
+Margarine: margarine; oleo
+Kruidenboter: garlic butter; herb butter
+Hagelslag melk: chocolate sprinkles; chocolate jimmies; sprinkles
+Vruchtenhagel: rainbow sprinkles; colored sprinkles
+Chocoladepasta: chocolate spread
+Hazelnootpasta: nutella; hazelnut spread; chocolate hazelnut spread
+Witte chocoladepasta: white chocolate spread
+Speculoospasta: cookie butter; biscoff spread; speculoos spread
+Karamelpasta: caramel spread; dulce de leche; caramel sauce
+Ontbijtkoek: gingerbread
+Bruine basterdsuiker: brown sugar; light brown sugar; dark brown sugar
+Kaneelsuiker: cinnamon sugar
+Kristalsuiker: sugar; granulated sugar; white sugar
+Poedersuiker: powdered sugar; confectioners sugar; icing sugar
+Aardbeienjam: strawberry jam; strawberry preserves; strawberry jelly
+Frambozenjam: raspberry jam; raspberry preserves
+Kersenjam: cherry jam; cherry preserves
+Abrikozenjam: apricot jam; apricot preserves
+Bosvruchtenjam: mixed berry jam; berry jam
+Bramenjam: blackberry jam; blackberry preserves
+Zwarte bessenjam: blackcurrant jam
+Pruimenjam: plum jam; plum preserves
+Rabarberjam: rhubarb jam
+Vijgenjam: fig jam; fig preserves
+Gemberjam: ginger jam
+Sinaasappelmarmelade: orange marmalade; marmalade
+Lemon curd: lemon curd
+Rode bessenjam: red currant jelly; redcurrant jelly
+Appelstroop: apple butter
+Schenkstroop: golden syrup; molasses
+Ahornsiroop: maple syrup; pure maple syrup
+Honing: honey
+Pindakaas: peanut butter; creamy peanut butter; smooth peanut butter
+Pindakaas met stukjes: crunchy peanut butter; chunky peanut butter
+Cashewnotenpasta: cashew butter
+Amandelpasta: almond butter
+Tahin: tahini
+Banaan: banana; bananas
+Appel: apple; apples; granny smith apple
+Peer: pear; pears
+Aardbeien: strawberries; strawberry
+Blauwe bessen: blueberries
+Frambozen: raspberries
+Vijgen: figs; fresh figs; fig
+Ananas: pineapple; pineapple chunks; crushed pineapple; pineapple rings
+Druiven: grapes; red grapes
+Meloen: melon; cantaloupe; honeydew
+Mango: mango
+Gedroogde cranberry's: dried cranberries; craisins
+Rozijnen: raisins
+Dadels: dates
+Kiwi: kiwi
+Perzik: peach; peaches
+Jonge kaas: gouda; gouda cheese
+Belegen kaas: aged gouda
+Oude kaas: old gouda
+Edammer: edam; edam cheese
+Komijnekaas: leyden cheese
+Emmentaler: swiss cheese; emmental; emmentaler; swiss
+Leerdammer: jarlsberg
+Gruyère: gruyere; gruyere cheese
+Cheddar: cheddar; cheddar cheese; sharp cheddar; sharp cheddar cheese; american cheese
+Mozzarella: mozzarella; mozzarella cheese; fresh mozzarella
+Parmezaan: parmesan; parmesan cheese; parmigiano-reggiano
+Brie: brie; brie cheese
+Camembert: camembert
+Geitenkaas zacht: goat cheese; chevre
+Blauwe kaas: blue cheese; roquefort; stilton
+Gorgonzola: gorgonzola
+Feta: feta; feta cheese
+Roomkaas naturel: cream cheese; neufchatel
+Roomkaas kruiden-knoflook: boursin; herbed cream cheese
+Hüttenkäse: cottage cheese
+Ricotta: ricotta; ricotta cheese
+Burrata: burrata
+Manchego: manchego
+Gegrilde halloumi: halloumi
+Schapenkaas: pecorino; pecorino romano
+Rookkaas: smoked gouda; smoked cheese
+Gekookte ham: ham; cooked ham; deli ham; sliced ham
+Rauwe ham: prosciutto
+Parmaham: parma ham
+Serranoham: serrano ham
+Kipfilet: chicken breast; chicken; cooked chicken
+Gerookte kipfilet: smoked chicken
+Kalkoenfilet: turkey; turkey breast; sliced turkey
+Rookvlees: corned beef
+Pastrami: pastrami
+Rosbief: roast beef
+Gebraden gehakt: meatloaf
+Boterhamworst: bologna
+Salami: salami; genoa salami
+Pepersalami: pepperoni
+Chorizo: chorizo
+Mortadella: mortadella
+Leverworst: liverwurst; braunschweiger
+Ontbijtspek: pancetta
+Bacon: bacon; bacon slices; crisp bacon
+Gelderse rookworst: kielbasa; smoked sausage
+Carpaccio: beef carpaccio
+Hollandse nieuwe haring: herring; pickled herring
+Gerookte zalm: smoked salmon; lox
+Tonijn: tuna; canned tuna; tuna in water
+Gerookte makreel: smoked mackerel
+Hollandse garnalen: shrimp; small shrimp; cooked shrimp; bay shrimp
+Sardines: sardines
+Ansjovis: anchovies; anchovy fillets
+Surimi: imitation crab; crab sticks
+Gerookte forel: smoked trout
+Filet americain: steak tartare
+Eiersalade: egg salad
+Tonijnsalade: tuna salad
+Krabsalade: crab salad; crabmeat
+Kip-kerriesalade: curried chicken salad
+Hummus naturel: hummus
+Tapenade: tapenade; olive tapenade
+Groene pesto: pesto; basil pesto
+Rode pesto: sun-dried tomato pesto
+Guacamole: guacamole
+Leverpastei: liver pate; pate
+Tzatziki: tzatziki
+Baba ganoush: baba ganoush
+Mayonaise: mayonnaise; mayo; light mayonnaise
+Knoflooksaus: garlic mayonnaise; aioli
+Tartaarsaus: tartar sauce
+Remouladesaus: remoulade
+Cocktailsaus: cocktail sauce; thousand island dressing; russian dressing
+Ketchup: ketchup; catsup
+Barbecuesaus: barbecue sauce; bbq sauce
+Zaanse mosterd: mustard; yellow mustard; prepared mustard; dijon mustard; dijon
+Grove mosterd: whole grain mustard; grainy mustard; stone ground mustard
+Honingmosterdsaus: honey mustard
+Mierikswortelsaus: horseradish; prepared horseradish; horseradish sauce
+Sambal oelek: sambal oelek; chili paste; chili garlic sauce
+Sriracha: sriracha; hot sauce
+Zoete chilisaus: sweet chili sauce
+Ketjap manis: sweet soy sauce; kecap manis
+Satésaus: peanut sauce; satay sauce
+Piccalilly: piccalilli; chow chow
+Mangochutney: mango chutney
+Uienchutney: onion jam; caramelized onions; onion chutney
+Augurkenrelish: relish; sweet pickle relish; pickle relish
+Gekookt ei: hard-boiled eggs; hard-cooked eggs; hard boiled eggs; boiled eggs
+Gebakken ei: fried egg; fried eggs
+Roerei: scrambled eggs
+Omelet: omelet
+Komkommer: cucumber; cucumbers; english cucumber
+Tomaat: tomato; tomatoes; tomato slices; roma tomatoes
+Sla: lettuce; romaine lettuce; leaf lettuce; romaine
+IJsbergsla: iceberg lettuce; shredded lettuce
+Rucola: arugula; rocket
+Veldsla: lambs lettuce; mache
+Spinazie: spinach; baby spinach; fresh spinach
+Rauwe ui: onion; onions; white onion; yellow onion; sweet onion
+Rode ui: red onion; red onions
+Lente-ui: green onions; scallions; green onion
+Gebakken uitjes: french fried onions; fried onions; crispy onions
+Augurk: pickles; dill pickles; pickle; gherkins; dill pickle
+Zilveruitjes: pearl onions; cocktail onions
+Radijs: radishes; radish
+Paprika: bell pepper; red bell pepper; green bell pepper; green pepper; red pepper
+Avocado: avocado; avocados
+Gebakken champignons: mushrooms; sliced mushrooms; sauteed mushrooms
+Tuinkers: cress; garden cress
+Alfalfa: alfalfa sprouts; sprouts
+Bieslook: chives; fresh chives
+Peterselie: parsley; fresh parsley; flat-leaf parsley
+Basilicum: basil; fresh basil; basil leaves
+Olijven: olives; black olives; kalamata olives; green olives
+Jalapeño: jalapenos; jalapeno; pickled jalapenos
+Zongedroogde tomaten: sun-dried tomatoes
+Rode biet: beets; beetroot; pickled beets
+Geraspte wortel: carrot; carrots; shredded carrots; grated carrot
+Gegrilde courgette: zucchini; grilled zucchini
+Gegrilde aubergine: eggplant; grilled eggplant
+Gegrilde paprika: roasted red peppers; roasted peppers
+Kappertjes: capers
+Taugé: bean sprouts
+Maïs: corn; sweet corn; corn kernels
+Rode peper: red chili; red chile; chili pepper; red pepper flakes
+Ingelegde rode ui: pickled red onions; pickled onions
+Waterkers: watercress
+Kroket: croquettes
+Gehaktbal: meatballs
+Hamburger: ground beef; hamburger; hamburger patties; beef patties
+Kipschnitzel: breaded chicken; chicken cutlets; chicken schnitzel
+Kibbeling: fried fish; fish fillets; cod
+Shoarma: shawarma; gyro meat
+Kipsaté: chicken satay
+Pulled pork: pulled pork; pork shoulder
+Walnoten: walnuts; chopped walnuts
+Pijnboompitten: pine nuts
+Zonnebloempitten: sunflower seeds
+Pompoenpitten: pumpkin seeds; pepitas
+Pinda's: peanuts; roasted peanuts
+Chips: potato chips; chips
+Kroepoek: prawn crackers; shrimp chips
+Sesamzaad: sesame seeds
+Hazelnoten: hazelnuts
+Cashewnoten: cashews
+Speculaas: speculoos cookies; biscoff cookies
+"""

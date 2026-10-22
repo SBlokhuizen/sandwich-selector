@@ -1,0 +1,5 @@
+# python environment for build.py, recipes.py and pairnet.py
+#   uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+numpy
+pyarrow
+torch

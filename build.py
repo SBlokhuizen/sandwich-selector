@@ -234,6 +234,59 @@ Pompoenpitten|pumpkin seeds|extra|nutty
 Pinda's|peanuts|extra|nutty peanut
 Chips|crisps|extra|fried
 Kroepoek|prawn crackers|extra|asian fried
+Speculaas|spiced biscuit slices|sweet|
+Poedersuiker|icing sugar|sweet|sprinkle
+Kristalsuiker|granulated sugar|sweet|sprinkle
+Rode bessenjam|redcurrant jam|jam|
+Ahornsiroop|maple syrup|jam|
+Kiwi|kiwi|fruit|
+Perzik|peach|fruit|
+Rookkaas|smoked cheese|cheese|mild smoky
+Schapenkaas|sheep's cheese|cheese|strong
+Belegen geitenkaas|aged goat cheese|cheese|goat strong
+Gorgonzola|gorgonzola|cheese|blue strong italian
+Ricotta|ricotta|cheese|mild creamy italian
+Burrata|burrata|cheese|mild creamy italian
+Brandnetelkaas|nettle cheese|cheese|mild herb
+Mosterdkaas|mustard cheese|cheese|mild mustard
+Manchego|manchego|cheese|strong
+Gegrilde halloumi|grilled halloumi|cheese|
+Katenspek|smoked cooked bacon|meat|smoky
+Ossenworst|raw smoked beef sausage|meat|cured
+Metworst|smoked cured sausage|meat|cured smoky
+Droge worst|dry sausage|meat|cured
+Grillworst|grilled sausage slices|meat|
+Carpaccio|beef carpaccio|meat|italian
+Zure haring|soused herring|fish|fishy pickled
+Bokking|smoked herring|fish|fishy smoky
+Gerookte forel|smoked trout|fish|fishy smoky
+Makreel in tomatensaus|mackerel in tomato sauce|fish|fishy
+Gerookte heilbot|smoked halibut|fish|fishy smoky
+Rundvleessalade|beef salad|salad|mayo
+Garnalensalade|shrimp salad|salad|mayo fishy
+Haringsalade|herring salad|salad|fishy pickled
+Makreelsalade|mackerel salad|salad|mayo fishy smoky
+Pittige kipsalade|spicy chicken salad|salad|mayo spicy
+Baba ganoush|smoky aubergine dip|salad|creamy smoky
+Mosterd-dillesaus|mustard-dill sauce|sauce|mustard herb
+Samuraisaus|samurai sauce|sauce|mayo spicy
+Andalousesaus|andalouse sauce|sauce|mayo
+Augurkenrelish|pickle relish|sauce|pickled
+Kappertjes|capers|veg|pickled italian
+Taugé|bean sprouts|veg|fresh asian
+Maïs|sweetcorn|veg|
+Rode peper|red chilli|veg|spicy
+Ingelegde rode ui|pickled red onion|veg|onion pickled
+Waterkers|watercress|veg|fresh herb
+Kipschnitzel|breaded chicken schnitzel|hot|fried
+Speklap|grilled pork belly|hot|smoky
+Bamischijf|fried noodle patty|hot|fried asian
+Garnalenkroket|shrimp croquette|hot|fried fishy
+Kipcorn|breaded chicken snack|hot|fried
+Pulled pork|pulled pork|hot|smoky
+Sesamzaad|sesame seeds|extra|sesame
+Hazelnoten|hazelnuts|extra|nutty
+Cashewnoten|cashews|extra|nutty
 """
 
 CATS = ["butter", "sweet", "jam", "nut", "fruit", "cheese", "meat", "fish", "salad", "sauce", "egg", "veg", "hot", "extra"]
@@ -291,6 +344,9 @@ GRILLED = ["Gegrilde courgette", "Gegrilde aubergine", "Gegrilde paprika"]
 PATE = ["Leverpastei", "Grove paté"]
 CURED_HAM = ["Parmaham", "Serranoham", "Rauwe ham"]
 STROOP = ["Appelstroop", "Perenstroop"]
+SMOKED_FISH = ["Gerookte forel", "Gerookte heilbot", "Gerookte zalm"]
+DRY_SAUSAGE = ["Metworst", "Droge worst"]
+SNACKS = ["Kipschnitzel", "Kipcorn", "Frikandel", "Hamburger", "Shoarma"]
 
 # Known combinations: final value, overrides the computed score.
 OVERRIDES = [
@@ -440,6 +496,80 @@ OVERRIDES = [
     ("Chips", MILD + HAM, 0.5), ("Chips", ["Kipfilet", "Eiersalade"], 0.4), ("Chips", CHOCO, 0.2), ("Chips", HAGEL, -0.6),
     ("Kroepoek", "Satésaus", 0.8), ("Kroepoek", SAMBAL, 0.6), ("Kroepoek", "Ketjap manis", 0.4),
     ("Pinda's", ["Banaan", "Chocoladepasta"], 0.6), ("Pinda's", SAMBAL, 0.5),
+    # dutch cold cuts
+    ("Katenspek", MUSTARD, 0.9), ("Katenspek", OLD, 0.8), ("Katenspek", MILD, 0.7), ("Katenspek", ["Gebakken ei", "Mosterdkaas"], 0.8),
+    ("Katenspek", ["Augurk", "Roerei", "Appelstroop"], 0.6), ("Katenspek", ["Sla", "Tomaat", "Rauwe ui"], 0.4),
+    ("Ossenworst", "Augurk", 0.9), ("Ossenworst", ["Zilveruitjes", "Rauwe ui"], 0.8), ("Ossenworst", ["Zaanse mosterd", "Piccalilly"], 0.7),
+    ("Ossenworst", OLD, 0.6), ("Ossenworst", "Peterselie", 0.4),
+    (DRY_SAUSAGE, "Zaanse mosterd", 0.8), (DRY_SAUSAGE, OLD, 0.7), (DRY_SAUSAGE, ["Augurk", "Piccalilly"], 0.6), (DRY_SAUSAGE, "Rauwe ui", 0.4),
+    ("Grillworst", MUSTARD, 0.7), ("Grillworst", MILD, 0.6), ("Grillworst", ["Ketchup", "Augurk"], 0.4),
+    ("Carpaccio", ["Parmezaan", "Rucola", "Truffelmayonaise"], 1.0), ("Carpaccio", "Pijnboompitten", 0.9),
+    ("Carpaccio", ["Groene pesto", "Kappertjes"], 0.8), ("Carpaccio", ["Zongedroogde tomaten", "Gebakken champignons"], 0.7),
+    # cheese
+    ("Rookkaas", ["Ontbijtspek", "Bacon", "Katenspek"], 0.7), ("Rookkaas", HAM + ["Gebakken ei"], 0.6), ("Rookkaas", MUSTARD + ["Augurk"], 0.5),
+    ("Schapenkaas", ["Vijgenjam", "Honing"], 0.9), ("Schapenkaas", ["Walnoten", "Peer"], 0.7), ("Schapenkaas", CURED_HAM, 0.6),
+    ("Belegen geitenkaas", ["Honing", "Uienchutney"], 0.9), ("Belegen geitenkaas", ["Vijgenjam", "Walnoten"], 0.8),
+    ("Belegen geitenkaas", ["Rode biet", "Appel"], 0.7), ("Belegen geitenkaas", "Rucola", 0.6),
+    ("Gorgonzola", "Peer", 1.0), ("Gorgonzola", ["Walnoten", "Honing", "Vijgenjam"], 0.9), ("Gorgonzola", ["Rucola", "Parmaham", "Hazelnoten"], 0.6),
+    ("Ricotta", "Honing", 0.9), ("Ricotta", ["Vijgen", "Perzik"], 0.8), ("Ricotta", ["Aardbeien", "Frambozen", "Groene pesto"], 0.7),
+    ("Ricotta", ["Spinazie", "Tomaat", "Rauwe ham"], 0.6),
+    ("Burrata", ["Tomaat", "Basilicum"], 1.0), ("Burrata", "Groene pesto", 0.9), ("Burrata", ["Parmaham", "Rucola", "Zongedroogde tomaten", "Perzik"], 0.8),
+    ("Burrata", ["Olijven", "Gegrilde paprika"], 0.6),
+    ("Brandnetelkaas", HAM + MUSTARD, 0.6), ("Brandnetelkaas", ["Tomaat", "Komkommer"], 0.5),
+    ("Mosterdkaas", HAM, 0.8), ("Mosterdkaas", ["Augurk", "Rookvlees", "Gelderse rookworst"], 0.6), ("Mosterdkaas", MUSTARD, 0.2),
+    ("Manchego", "Serranoham", 1.0), ("Manchego", "Chorizo", 0.9), ("Manchego", ["Olijven", "Vijgenjam"], 0.8), ("Manchego", "Gegrilde paprika", 0.7),
+    ("Gegrilde halloumi", GRILLED, 0.8), ("Gegrilde halloumi", ["Tzatziki", "Zoete chilisaus", "Tomaat"] + HUMMUS, 0.7),
+    ("Gegrilde halloumi", ["Komkommer", "Rucola", "Honing", "Peterselie"], 0.6),
+    # fish
+    ("Zure haring", "Rauwe ui", 0.9), ("Zure haring", ["Rode ui", "Augurk", "Ingelegde rode ui"], 0.8), ("Zure haring", "Rode biet", 0.7),
+    ("Zure haring", ["Mierikswortelsaus"], 0.6), ("Zure haring", "Gekookt ei", 0.5),
+    ("Bokking", "Roerei", 0.8), ("Bokking", ["Rauwe ui", "Bieslook"], 0.7), ("Bokking", "Mierikswortelsaus", 0.6),
+    (SMOKED_FISH, "Mosterd-dillesaus", 1.0), (["Gerookte forel", "Gerookte heilbot"], "Mierikswortelsaus", 0.9),
+    (SMOKED_FISH, ["Roomkaas naturel", "Bieslook"], 0.8), (SMOKED_FISH, ["Komkommer", "Kappertjes", "Ingelegde rode ui"], 0.7),
+    (SMOKED_FISH, ["Waterkers", "Rucola", "Rode biet"], 0.6), ("Gerookte zalm", "Rode ui", 0.7),
+    ("Makreel in tomatensaus", ["Rauwe ui", "Rode ui"], 0.6), ("Makreel in tomatensaus", ["Komkommer", "Sla"], 0.4),
+    # salads
+    ("Rundvleessalade", ["Augurk", "Gekookt ei"], 0.7), ("Rundvleessalade", ["Zilveruitjes", "Sla"], 0.6), ("Rundvleessalade", ["Tomaat", "Rode biet"], 0.5),
+    ("Garnalensalade", ["Sla", "Bieslook", "Avocado"], 0.7), ("Garnalensalade", ["Komkommer", "Gekookt ei"], 0.6), ("Garnalensalade", "Cocktailsaus", 0.3),
+    ("Haringsalade", "Rode biet", 0.7), ("Haringsalade", ["Rauwe ui", "Augurk", "Gekookt ei"], 0.6),
+    ("Makreelsalade", "Rode ui", 0.7), ("Makreelsalade", ["Komkommer", "Bieslook"], 0.6), ("Makreelsalade", "Rucola", 0.5),
+    ("Pittige kipsalade", "Sla", 0.7), ("Pittige kipsalade", ["Tomaat", "Komkommer", "Maïs"], 0.6), ("Pittige kipsalade", ["Avocado", "Rode peper"], 0.5),
+    ("Baba ganoush", ["Feta", "Gegrilde halloumi"], 0.8), ("Baba ganoush", ["Tomaat", "Komkommer", "Peterselie", "Gegrilde paprika", "Tahin"], 0.7),
+    ("Baba ganoush", ["Rucola", "Olijven"], 0.6), ("Baba ganoush", HUMMUS, 0.5),
+    # sauces
+    ("Mosterd-dillesaus", ["Gekookt ei", "Eiersalade"], 0.6), ("Mosterd-dillesaus", HAM, 0.4),
+    ("Samuraisaus", "Shoarma", 0.9), ("Samuraisaus", ["Kipschnitzel", "Kipcorn", "Hamburger"], 0.8), ("Samuraisaus", ["Frikandel", "Pulled pork", "Kipsaté"], 0.6),
+    ("Andalousesaus", ["Frikandel", "Kipcorn", "Kipschnitzel"], 0.8), ("Andalousesaus", ["Hamburger", "Shoarma"], 0.7),
+    ("Augurkenrelish", "Hamburger", 0.9), ("Augurkenrelish", ["Pastrami", "Rookvlees"], 0.7), ("Augurkenrelish", ["Cheddar", "Katenspek", "Pulled pork"], 0.6),
+    # vegetables
+    ("Kappertjes", "Filet americain", 0.8), ("Kappertjes", "Tonijn", 0.7), ("Kappertjes", "Tonijnsalade", 0.6),
+    ("Taugé", "Kipsaté", 0.9), ("Taugé", "Satésaus", 0.8), ("Taugé", ["Ketjap manis", "Bamischijf"], 0.7), ("Taugé", ["Kroepoek", "Gebakken uitjes"] + SAMBAL, 0.6),
+    ("Taugé", PB, 0.5),
+    ("Maïs", "Tonijnsalade", 0.7), ("Maïs", ["Tonijn"], 0.6), ("Maïs", ["Kipfilet", "Sla", "Pulled pork"], 0.5),
+    ("Rode peper", ["Avocado", "Guacamole"], 0.7), ("Rode peper", ["Shoarma", "Kipsaté", "Gebakken ei"], 0.5),
+    ("Ingelegde rode ui", "Pulled pork", 0.9), ("Ingelegde rode ui", ["Avocado", "Hamburger"], 0.8),
+    ("Ingelegde rode ui", ["Guacamole", "Feta", "Geitenkaas zacht", "Shoarma"], 0.7),
+    ("Waterkers", ["Gekookt ei", "Eiersalade"], 0.8), ("Waterkers", ["Roomkaas naturel", "Rosbief"], 0.6),
+    # hot snacks
+    ("Kipschnitzel", "Sla", 0.7), ("Kipschnitzel", ["Tomaat", "Mayonaise", "Knoflooksaus", "Zoete chilisaus"], 0.6), ("Kipschnitzel", ["Komkommer", "Cheddar"], 0.5),
+    ("Speklap", "Zaanse mosterd", 0.8), ("Speklap", "Gebakken uitjes", 0.7), ("Speklap", ["Appelstroop"], 0.6), ("Speklap", ["Sla", "Augurk", "Ketjap manis"], 0.5),
+    ("Bamischijf", SAMBAL + ["Satésaus"], 0.8), ("Bamischijf", ["Ketjap manis", "Curry"], 0.6), ("Bamischijf", "Mayonaise", 0.5),
+    ("Garnalenkroket", "Cocktailsaus", 0.9), ("Garnalenkroket", "Tartaarsaus", 0.8), ("Garnalenkroket", ["Sla", "Mayonaise"], 0.6), ("Garnalenkroket", "Bieslook", 0.5),
+    ("Kipcorn", "Curry", 0.8), ("Kipcorn", "Mayonaise", 0.7), ("Kipcorn", "Satésaus", 0.6), ("Kipcorn", "Sla", 0.5),
+    ("Pulled pork", "Barbecuesaus", 1.0), ("Pulled pork", "Cheddar", 0.8), ("Pulled pork", ["Augurk", "Jalapeño", "Gebakken uitjes"], 0.7), ("Pulled pork", "Sla", 0.5),
+    # sweet
+    ("Speculaas", "Roomboter", 1.0), ("Speculaas", "Appel", 0.6), ("Speculaas", "Banaan", 0.5), ("Speculaas", ["Chocoladepasta", "Roomkaas naturel"], 0.4),
+    ("Poedersuiker", "Roomboter", 0.8), ("Poedersuiker", "Aardbeien", 0.8), ("Poedersuiker", "Frambozen", 0.6), ("Poedersuiker", "Banaan", 0.4),
+    ("Kristalsuiker", "Roomboter", 0.9), ("Kristalsuiker", "Aardbeien", 0.7), ("Kristalsuiker", "Banaan", 0.4),
+    ("Rode bessenjam", ["Roomkaas naturel", "Brie"], 0.7), ("Rode bessenjam", ["Geitenkaas zacht", "Kalkoenfilet", "Pindakaas"], 0.6),
+    ("Ahornsiroop", "Bacon", 0.9), ("Ahornsiroop", ["Ontbijtspek", "Banaan"], 0.8), ("Ahornsiroop", "Walnoten", 0.7),
+    ("Ahornsiroop", ["Pindakaas", "Roomboter"], 0.6), ("Ahornsiroop", ["Gebakken ei", "Pulled pork", "Katenspek"], 0.5),
+    ("Kiwi", ["Banaan", "Roomkaas naturel"], 0.5), ("Kiwi", "Chocoladepasta", 0.4),
+    ("Perzik", ["Parmaham", "Burrata"], 0.8), ("Perzik", ["Brie", "Geitenkaas zacht", "Honing"], 0.7), ("Perzik", ["Mozzarella", "Rucola"], 0.6),
+    # extras
+    ("Sesamzaad", ["Avocado", "Hummus naturel"], 0.7), ("Sesamzaad", ["Taugé", "Kipsaté"], 0.6), ("Sesamzaad", ["Tahin", "Honing", "Satésaus", "Pindakaas"], 0.5),
+    ("Hazelnoten", ["Hazelnootpasta", "Chocoladepasta"], 0.8), ("Hazelnoten", ["Banaan", "Honing", "Geitenkaas zacht", "Brie"], 0.6),
+    ("Cashewnoten", ["Kip-kerriesalade", "Kipsaté"], 0.6), ("Cashewnoten", ["Banaan", "Honing"], 0.5),
 ]
 
 
@@ -491,6 +621,8 @@ def build():
     assert s("Hagelslag melk", "Hollandse nieuwe haring") <= -9
     assert s("Kruidenboter", "Aardbeienjam") <= -9
     assert s("Pindakaas", "Sambal oelek") >= 8
+    assert s("Katenspek", "Zaanse mosterd") >= 8
+    assert s("Katenspek", "Hagelslag melk") <= -9
     return items, S
 
 

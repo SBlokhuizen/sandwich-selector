@@ -11,19 +11,38 @@ set(1, 3, -10);
 const adj = A.goodAdj(S, 7);
 assert.strictEqual(A.components(adj).count, 1);
 assert.deepStrictEqual(A.bridges(adj).map((b) => b[0]).sort(), [2, 3]);
-const comm = A.louvain(S, 7);
+const comm = A.communities(S, { thr: 7, bad: -5, gamma: 1 });
 assert.strictEqual(comm[0], comm[1]); assert.strictEqual(comm[3], comm[4]); assert.notStrictEqual(comm[0], comm[4]);
+// an item without good partners stays alone, even when it clashes with someone
+const S2 = S.map((r) => [...r, -8]); S2.push(new Array(n + 1).fill(-8)); S2[n][n] = 0;
+const comm2 = A.communities(S2, { thr: 7, bad: -5, gamma: 1, clash: 0.5 });
+assert(comm2.filter((c) => c === comm2[n]).length === 1);
 const st = A.nodeStats(S, adj, -5);
 assert.strictEqual(st[2].open, 1); // 1~2~3 with 1 x 3 bad
 assert.strictEqual(st[0].clustering, 1);
 const items = S.map(() => ({ cat: "x" }));
-assert.deepStrictEqual(A.suggest(S, items, [0], 3, 1)[0].set.slice().sort(), [0, 1, 2]);
+const E0 = A.engine(S, items);
+assert.deepStrictEqual(A.suggest(E0, [0], 3, { count: 1 })[0].set.slice().sort(), [0, 1, 2]);
+assert.strictEqual(A.explain(E0, [0, 1, 3]).weakest[2], -10);
+assert.strictEqual(A.swaps(E0, [0, 1, 3], 2)[0].item, 2);
 
 // real data loads and analyses
 const DATA = new Function(fs.readFileSync(__dirname + "/data.js", "utf8") + "; return DATA;")();
 const idx = (name) => DATA.items.findIndex((i) => i.name === name);
-const r = A.suggest(DATA.S, DATA.items, [idx("Pindakaas")], 3, 5);
-assert(r.length === 5 && r.every((x) => x.set.includes(idx("Pindakaas")) && x.fit > 0.5));
-const c = A.louvain(DATA.S, 7);
+const E = A.engine(DATA.S, DATA.items);
+const r = A.suggest(E, [idx("Pindakaas")], 3, { count: 5 });
+assert(r.length === 5 && r.every((x) => x.set.includes(idx("Pindakaas")) && x.score > 0.5));
+// results are not like-for-like variants of each other, and exclusions hold
+for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) assert(!A.isVariant(E, r[a].set, r[b].set));
+const banana = idx("Banaan");
+assert(A.suggest(E, [idx("Pindakaas")], 3, { exclude: new Set([banana]) }).every((x) => !x.set.includes(banana)));
+// two interchangeable toppings on one sandwich get marked down
+assert(A.explain(E, [idx("Sambal oelek"), idx("Sambal badjak"), idx("Kroket")]).penalties.some((p) => p.kind === "twin"));
+// surprise mode is reproducible per seed
+assert.deepStrictEqual(A.suggest(E, [], 3, { noise: 0.05, seed: 9, count: 1 })[0].set, A.suggest(E, [], 3, { noise: 0.05, seed: 9, count: 1 })[0].set);
+const butter = new Set(DATA.items.flatMap((it, i) => (it.cat === "butter" ? [i] : [])));
+const c = A.communities(DATA.S, { thr: 7, bad: -5, skip: butter });
+// every cluster member has a good partner inside its own cluster
+c.forEach((k, i) => { if (c.filter((x) => x === k).length > 1) assert(c.some((x, j) => j !== i && x === k && DATA.S[i][j] >= 7), DATA.items[i].name); });
 console.log("communities:", Math.max(...c) + 1, "| PB suggestions:", r.map((x) => x.set.map((i) => DATA.items[i].name).join(" + ")).join(" ; "));
 console.log("ok");

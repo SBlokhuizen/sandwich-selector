@@ -29,7 +29,8 @@ assert.strictEqual(A.swaps(E0, [0, 1, 3], 2)[0].item, 2);
 // real data loads and analyses
 const DATA = new Function(fs.readFileSync(__dirname + "/data.js", "utf8") + "; return DATA;")();
 const idx = (name) => DATA.items.findIndex((i) => i.name === name);
-const E = A.engine(DATA.S, DATA.items);
+const E = A.engine(DATA.S, DATA.items, { known: DATA.K, classics: DATA.classics });
+const butter0 = () => new Set(DATA.items.flatMap((it, i) => (it.cat === "butter" ? [i] : [])));
 const r = A.suggest(E, [idx("Pindakaas")], 3, { count: 5 });
 assert(r.length === 5 && r.every((x) => x.set.includes(idx("Pindakaas")) && x.score > 0.5));
 // results are not like-for-like variants of each other, and exclusions hold
@@ -38,6 +39,12 @@ const banana = idx("Banaan");
 assert(A.suggest(E, [idx("Pindakaas")], 3, { exclude: new Set([banana]) }).every((x) => !x.set.includes(banana)));
 // two interchangeable toppings on one sandwich get marked down
 assert(A.explain(E, [idx("Sambal oelek"), idx("Sambal badjak"), idx("Kroket")]).penalties.some((p) => p.kind === "twin"));
+// classics are recognised, estimated pairs are marked down, strict mode only keeps proven pairs
+const gezond = DATA.classics.find((c) => c.name === "Broodje gezond").set;
+assert.strictEqual(A.classicOf(E, gezond).kind, "is");
+assert(A.explain(E, gezond.slice(0, 3)).classic.kind === "part");
+for (const r of A.suggest(E, [idx("Brie")], 4, { proven: true, exclude: butter0() })) assert(A.proven(E, r.set, [idx("Brie")]));
+assert(A.explain(E, [idx("Mozzarella"), idx("Sambal oelek")]).penalties.some((p) => p.kind === "stranger"));
 // surprise mode is reproducible per seed
 assert.deepStrictEqual(A.suggest(E, [], 3, { noise: 0.05, seed: 9, count: 1 })[0].set, A.suggest(E, [], 3, { noise: 0.05, seed: 9, count: 1 })[0].set);
 const butter = new Set(DATA.items.flatMap((it, i) => (it.cat === "butter" ? [i] : [])));

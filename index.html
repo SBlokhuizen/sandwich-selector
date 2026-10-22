@@ -118,6 +118,14 @@ h3 { font-size: 15px; margin: 0 0 8px; }
 .sandwich .layers .chip.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .why { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
 .why .neg { color: var(--bad); font-weight: 600; font-variant-numeric: tabular-nums; }
+.why .pos { color: var(--good); font-weight: 600; font-variant-numeric: tabular-nums; }
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 2px 10px; }
+.switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 500; cursor: pointer; }
+.switch input { accent-color: var(--accent); width: 16px; height: 16px; }
+.flavour { display: grid; grid-template-columns: 70px 1fr; gap: 4px 10px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.flavour .lvl { display: flex; gap: 3px; }
+.flavour .lvl i { width: 18px; height: 8px; border-radius: 3px; background: var(--surface-2); }
+.flavour .lvl i.on { background: var(--accent); }
 .swap { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
 .swap .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .delta { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; }
@@ -198,8 +206,9 @@ tbody tr:hover { background: var(--surface-2); }
       <div class="row"><span class="muted small lbl">Never include:</span><div class="chips" id="nevers"></div><div class="combo mini-combo"><input id="nq" placeholder="Leave out…" aria-label="Leave out a topping"></div></div>
       <div class="row" style="justify-content:space-between">
         <div class="row"><span class="muted small lbl">Toppings per sandwich:</span><div class="seg" id="size"></div></div>
-        <div class="row"><button class="btn ghost" id="share-build" title="Copy a link to these settings">Copy link</button><button class="btn" id="surprise">🎲 Surprise me</button></div>
+        <div class="row"><label class="switch" title="Only pairs that were checked by hand (at +0.5 or better), or that the flavour model is very sure of (+0.8 or better)"><input type="checkbox" id="strict"> Proven pairs only</label><button class="btn ghost" id="share-build" title="Copy a link to these settings">Copy link</button><button class="btn" id="surprise">🎲 Surprise me</button></div>
       </div>
+      <div class="row" style="align-items:flex-start"><span class="muted small lbl" style="padding-top:5px">Or start from a classic:</span><div class="chips" id="classics" style="flex:1"></div></div>
     </div>
     <div id="surprise-out" style="margin-top:18px" hidden></div>
     <div id="results" class="grid g2" style="margin-top:18px"></div>
@@ -367,12 +376,12 @@ document.querySelectorAll(".n-items").forEach((el) => (el.textContent = N));
 combo($("#q"), openItem);
 let catFilter = null;
 
-function pairRow(i, v) {
+function pairRow(i, v, ok = true) {
   const w = (Math.abs(v) / 10) * 50;
   return `<div class="pair" data-open="${i}" title="Open ${esc(items[i].name)}">
     <div class="name">${catDot(i)}<b>${esc(items[i].name)}</b><span>${esc(items[i].en)}</span></div>
     <div class="bar"><i style="${v >= 0 ? "left:50%" : `left:${50 - w}%`};width:${w}%;background:${scoreColor(v)}"></i></div>
-    <div class="score" style="color:${v >= 4 ? "var(--good)" : v <= -4 ? "var(--bad)" : "var(--muted)"}">${fmt(v)}<span class="verdict">${verdict(v)}</span></div></div>`;
+    <div class="score" style="color:${v >= 4 ? "var(--good)" : v <= -4 ? "var(--bad)" : "var(--muted)"}" title="${ok ? "Hand-checked pair" : "Estimated by the flavour model"}">${ok ? "" : "≈ "}${fmt(v)}<span class="verdict">${verdict(v)}</span></div></div>`;
 }
 function renderSearch() {
   const el = $("#detail");
@@ -399,21 +408,25 @@ function renderSearch() {
         <div class="stat"><b>${Math.round(st.clustering * 100)}%</b><span>of its partners also like each other</span></div>
         <div class="stat"><b>${st.open}</b><span>clashing pairs it still bridges</span></div>
       </div>
+      ${it.flavour ? `<div class="grid g2" style="gap:24px"><div><h3>Flavour profile</h3><div class="flavour">${DATA.dims.map((d, k) => `<span>${d}</span><span class="lvl">${[1, 2, 3].map((l) => `<i class="${it.flavour[k] >= l ? "on" : ""}"></i>`).join("")}</span>`).join("")}</div></div>
+        <div><h3>Classics with ${esc(it.name)}</h3>${CLASSICS.filter((c) => c.set.includes(i)).map((c) => `<div class="small" style="margin-bottom:4px"><b>${esc(c.name)}</b> <span class="muted">${esc(c.set.map((j) => items[j].name).join(" + "))}</span></div>`).join("") || `<span class="muted small">None on file yet.</span>`}</div></div>` : ""}
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:10px">
         <h3 style="margin:0">Everything, best match first</h3>
         <div class="chips"><span class="chip ${catFilter ? "" : "on"}" data-cat="">All</span>${cats.map((k) => `<span class="chip ${catFilter === k ? "on" : ""}" data-cat="${k}">${dot(CAT[k][1])}${CAT[k][0]}</span>`).join("")}</div>
       </div>
-      <div class="pairs">${others.map((j) => pairRow(j, S[i][j])).join("")}</div>
+      <p class="muted small" style="margin:0 0 8px">≈ marks a score estimated by the flavour model; the rest were checked by hand.</p>
+      <div class="pairs">${others.map((j) => pairRow(j, S[i][j], sure(i, j))).join("")}</div>
     </div>`;
   $("#to-build").onclick = () => { seeds = [i]; nevers = nevers.filter((x) => x !== i); swapOpen = surprise = null; location.hash = "build"; };
   el.querySelectorAll("[data-cat]").forEach((ch) => (ch.onclick = () => { catFilter = ch.dataset.cat || null; renderSearch(); }));
 }
 
 // ---------- Build tab (#build?with=A,B&without=C&n=3) ----------
-const E = Analysis.engine(S, items);
-let seeds = [], nevers = [], size = 3, swapOpen = null, surprise = null, surpriseSeed = 1, resCache = {};
+const E = Analysis.engine(S, items, { known: DATA.K || [], classics: DATA.classics || [] });
+const sure = (a, b) => !DATA.K || E.isKnown[a][b] === 1;
+let seeds = [], nevers = [], size = 3, strict = false, swapOpen = null, surprise = null, surpriseSeed = 1, resCache = {};
 const byName = (n) => items.findIndex((it) => it.name === n);
 const parseList = (v) => [...new Set((v ? v.split(",") : []).map(byName).filter((i) => i >= 0))];
 function buildQuery(w = seeds, n = size, withNevers = true) {
@@ -421,6 +434,7 @@ function buildQuery(w = seeds, n = size, withNevers = true) {
   if (w.length) p.set("with", w.map((i) => items[i].name).join(","));
   if (withNevers && nevers.length) p.set("without", nevers.map((i) => items[i].name).join(","));
   p.set("n", n);
+  if (withNevers && strict) p.set("proven", 1);
   return "build?" + p;
 }
 function loadBuild(q) {
@@ -429,6 +443,7 @@ function loadBuild(q) {
   nevers = parseList(p.get("without")).filter((i) => !seeds.includes(i) && !BUTTER.has(i));
   const n = +p.get("n");
   if (n >= 2 && n <= 5) size = n;
+  strict = p.get("proven") === "1";
   swapOpen = surprise = null;
 }
 const linkTo = (q) => location.href.split("#")[0] + "#" + q;
@@ -448,6 +463,7 @@ async function copyLink(url) {
   toast("Link copied");
 }
 const excluded = () => new Set([...BUTTER, ...nevers]);
+const engineOpts = () => ({ exclude: excluded(), proven: strict });
 // settings changed: forget the open swap panel and surprise
 const changed = () => { swapOpen = surprise = null; renderBuild(); };
 
@@ -456,10 +472,11 @@ $("#size").onclick = (e) => { const b = e.target.closest("button"); if (b) { siz
 combo($("#bq"), (i) => { if (!seeds.includes(i)) seeds.push(i); nevers = nevers.filter((x) => x !== i); changed(); }, (i) => !seeds.includes(i));
 combo($("#nq"), (i) => { if (!nevers.includes(i)) nevers.push(i); seeds = seeds.filter((x) => x !== i); changed(); }, (i) => !nevers.includes(i) && !BUTTER.has(i));
 $("#share-build").onclick = () => copyLink(linkTo(buildQuery()));
+$("#strict").onchange = (e) => { strict = e.target.checked; changed(); };
 $("#surprise").onclick = () => {
   const n = seeds.length >= size ? Math.min(5, seeds.length + 1) : size;
   if (seeds.length >= n) return toast("Remove a topping to leave room for a surprise");
-  const r = Analysis.suggest(E, seeds, n, { count: 1, exclude: excluded(), noise: 0.08, seed: surpriseSeed++ * 7717 });
+  const r = Analysis.suggest(E, seeds, n, { ...engineOpts(), count: 1, noise: 0.08, seed: surpriseSeed++ * 7717 });
   if (!r.length) return toast("Nothing left to surprise you with");
   surprise = r[0].set;
   if (swapOpen && swapOpen.key === "s") swapOpen = null;
@@ -469,31 +486,54 @@ $("#surprise").onclick = () => {
 
 const pct = (x) => Math.round(x * 100) + "%";
 const scoreTone = (x) => (x >= 0.4 ? "var(--good)" : x <= -0.4 ? "var(--bad)" : "var(--muted)");
+// classics to start from: the best-scoring ones first
+const CLASSICS = (DATA.classics || []).map((c) => ({ ...c, score: Analysis.score(E, c.set) })).sort((a, b) => b.score - a.score);
+let classicsOpen = false;
+function renderClassics() {
+  const shown = classicsOpen ? CLASSICS : CLASSICS.slice(0, 10);
+  $("#classics").innerHTML = shown.map((c, k) => `<span class="chip" data-classic="${k}" title="${esc(c.set.map((i) => items[i].name).join(" + "))} · ${pct(Math.min(1, c.score))}">${esc(c.name)}</span>`).join("")
+    + `<span class="chip" data-more style="border-style:dashed">${classicsOpen ? "Fewer" : `+${CLASSICS.length - shown.length} more`}</span>`;
+}
+renderClassics();
+$("#classics").onclick = (e) => {
+  if (e.target.closest("[data-more]")) { classicsOpen = !classicsOpen; return renderClassics(); }
+  const ch = e.target.closest("[data-classic]");
+  if (!ch) return;
+  const c = CLASSICS[+ch.dataset.classic];
+  seeds = c.set.slice(); nevers = nevers.filter((x) => !seeds.includes(x)); size = Math.min(5, Math.max(2, seeds.length));
+  changed();
+};
 function penaltyText(p) {
   const A = p.a !== undefined ? esc(items[p.a].name) : "", B = p.b !== undefined ? esc(items[p.b].name) : "";
   if (p.kind === "twin") return `${A} and ${B} do the same job`;
   if (p.kind === "double") return `two of a kind: ${A} and ${B} (${CAT[items[p.a].cat][0].toLowerCase()})`;
+  if (p.kind === "stranger") return `${A} comes from a cuisine that does not meet the rest`;
+  if (p.kind === "pile") return `${p.items.length} ${CAT[p.cat][0].toLowerCase()} piled on`;
+  if (p.kind === "unproven") return `${p.count} pair${p.count === 1 ? " is" : "s are"} estimated, not proven (≈)`;
   return "nothing to carry it, only sides and sauces";
 }
-function sandwichCard({ set, score, harmony, penalties, weakest, pairs }, title, key, { mine = false, cls = "" } = {}) {
+const CLASSIC_WORD = { is: "Classic", extends: "Classic, extended:", part: "From the classic" };
+function sandwichCard({ set, score, harmony, penalties, weakest, pairs, classic, bonus }, title, key, { mine = false, cls = "" } = {}) {
   const why = [];
   if (weakest && set.length > 2) why.push(`<span>Weakest link: ${esc(items[weakest[0]].name)} × ${esc(items[weakest[1]].name)} <b style="color:${scoreColor(weakest[2])}">${fmt(weakest[2])}</b></span>`);
-  if (penalties.length) why.push(`<span>Taste ${pct(harmony)}, then:</span>`, ...penalties.map((p) => `<span><span class="neg">−${pct(p.value)}</span> ${penaltyText(p)}</span>`));
+  if (penalties.length || bonus) why.push(`<span>Taste ${pct(harmony)}, then:</span>`, ...penalties.map((p) => `<span><span class="neg">−${pct(p.value)}</span> ${penaltyText(p)}</span>`));
+  if (bonus) why.push(`<span><span class="pos">+${pct(bonus)}</span> ${classic.kind === "part" ? "part of" : classic.kind === "extends" ? "builds on" : "is"} a classic: ${esc(classic.name)}</span>`);
   const open = swapOpen && swapOpen.key === key ? swapOpen.k : -1;
   let swap = "";
   if (open >= 0) {
-    const it = set[open], opts = Analysis.swaps(E, set, open, { exclude: excluded(), count: 8 });
+    const it = set[open], opts = Analysis.swaps(E, set, open, { ...engineOpts(), count: 8 });
     swap = `<div class="swap"><div class="row" style="justify-content:space-between"><span class="small"><b>Swap ${esc(items[it].name)}</b> for…</span><span class="small"><a href="#" data-open="${it}">all its pairings</a> · <a href="#" data-never="${it}">never include</a></span></div>
       <div class="opts">${opts.map((o) => `<span class="chip" data-pick="${o.set.join(",")}" title="New score ${pct(o.score)}">${catDot(o.item)}${esc(items[o.item].name)} <span class="delta" style="color:${o.delta > 0.005 ? "var(--good)" : o.delta < -0.005 ? "var(--bad)" : "var(--muted)"}">${o.delta >= 0 ? "+" : "−"}${pct(Math.abs(o.delta))}</span></span>`).join("")}</div></div>`;
   }
   const sorted = pairs.slice().sort((p, q) => q[2] - p[2]);
   return `<div class="card sandwich ${cls}" data-key="${key}" data-set="${set.join(",")}">
-    <div class="row" style="justify-content:space-between"><h3 style="margin:0">${title}</h3><span class="score" style="color:${scoreTone(score)}" title="Pair harmony minus deductions">${pct(score)} harmony</span></div>
-    <div class="meter"><i style="width:${Math.max(0, score) * 100}%"></i></div>
+    <div class="row" style="justify-content:space-between"><h3 style="margin:0">${title}</h3><span class="score" style="color:${scoreTone(score)}" title="Pair harmony minus deductions, plus a bonus for classics">${pct(Math.min(1, score))} harmony</span></div>
+    ${classic ? `<div><span class="badge">★ ${CLASSIC_WORD[classic.kind]} ${esc(classic.name)}</span></div>` : ""}
+    <div class="meter"><i style="width:${Math.min(1, Math.max(0, score)) * 100}%"></i></div>
     <div class="layers">${set.map((i, k) => `<span class="chip ${seeds.includes(i) ? "on" : ""} ${k === open ? "sel" : ""}" data-swap="${k}" title="Swap ${esc(items[i].name)}">${catDot(i)}${esc(items[i].name)} <span class="x">⇄</span></span>`).join("")}</div>
     ${swap}
     ${why.length ? `<div class="why">${why.join("")}</div>` : ""}
-    <div class="mini">${sorted.map(([a, b, v]) => `<span>${esc(items[a].name)} × ${esc(items[b].name)}</span><b style="color:${scoreColor(v)}">${fmt(v)}</b>`).join("")}</div>
+    <div class="mini">${sorted.map(([a, b, v, ok]) => `<span>${esc(items[a].name)} × ${esc(items[b].name)}</span><b style="color:${scoreColor(v)}" title="${ok ? "Hand-checked pair" : "Estimated by the flavour model"}">${ok ? "" : "≈ "}${fmt(v)}</b>`).join("")}</div>
     <div class="card-actions">${key === "s" ? `<button class="btn ghost small" data-again>Again</button>` : ""}${mine ? "" : `<button class="btn ghost small" data-use>Make it mine</button>`}<button class="btn ghost small" data-copy>Copy link</button></div>
   </div>`;
 }
@@ -505,8 +545,9 @@ function renderBuild() {
   $("#seeds").querySelectorAll("[data-rm]").forEach((ch) => (ch.onclick = () => { seeds = seeds.filter((s) => s !== +ch.dataset.rm); changed(); }));
   $("#nevers").querySelectorAll("[data-rmn]").forEach((ch) => (ch.onclick = () => { nevers = nevers.filter((s) => s !== +ch.dataset.rmn); changed(); }));
   const mine = seeds.length >= size;
-  const key = [seeds, nevers, size].join("|");
-  const res = mine ? [{ set: seeds, ...Analysis.explain(E, seeds) }] : (resCache[key] ||= Analysis.suggest(E, seeds, size, { exclude: excluded() }));
+  $("#strict").checked = strict;
+  const key = [seeds, nevers, size, strict].join("|");
+  const res = mine ? [{ set: seeds, ...Analysis.explain(E, seeds) }] : (resCache[key] ||= Analysis.suggest(E, seeds, size, engineOpts()));
   $("#results").innerHTML = res.map((r, k) => sandwichCard(r, mine ? "Your sandwich" : "Suggestion " + (k + 1), "r" + k, { mine })).join("") || `<div class="empty">No combinations found. Try leaving fewer toppings out.</div>`;
   const so = $("#surprise-out");
   so.hidden = !surprise;

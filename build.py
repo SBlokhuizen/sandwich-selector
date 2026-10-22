@@ -1,9 +1,17 @@
 """Generates data.js: Dutch sandwich toppings and a pairwise pairing score in [-1, 1].
 
-Score = category-pair base + tag rules, clamped, then hand-set overrides for known combos.
-Run: python3 build.py
+Scores come from three layers:
+  1. rules: a category-pair base table plus tag rules (the coarse "sweet vs savoury" structure);
+  2. a flavour model: ridge regression on the toppings' taste profiles (flavours.py) and the rule score,
+     trained on every hand-set pair, which fills in the pairs nobody scored by hand;
+  3. hand-set scores (OVERRIDES and flavours.CLASHES), which always win.
+Run: python3 build.py            (writes data.js and prints the model's cross-validation report)
 """
 import json
+
+import numpy as np
+
+from flavours import CLASHES, CLASSICS, DIMS, PROFILES
 
 # name | English gloss | category | tags
 ITEMS = """
@@ -360,6 +368,9 @@ OVERRIDES = [
     ("Amandelpasta", ["Aardbeien", "Frambozenjam", "Kersenjam", "Dadels"], 0.7),
     ("Tahin", "Honing", 0.9), ("Tahin", "Dadels", 0.8), ("Tahin", "Gegrilde aubergine", 0.8), ("Tahin", HUMMUS, 0.4),
     ("Tahin", "Banaan", 0.6), ("Tahin", ["Kipfilet", "Feta"], 0.4),
+    # butter staples
+    (["Roomboter", "Halvarine", "Margarine"], HAGEL + ["Hagelslag wit", "Vruchtenhagel", "Anijshagel", "Roze muisjes", "Blauwe muisjes", "Gestampte muisjes", "Chocoladevlokken melk"], 1.0),
+    (["Roomboter", "Halvarine", "Margarine"], MILD + OLD + HAM, 0.8), ("Roomboter", ["Gebakken ei", "Hollandse garnalen", "Gerookte paling", "Kroket"], 0.8),
     # sweet
     ("Roomboter", ["Ontbijtkoek", "Bruine basterdsuiker", "Kaneelsuiker"], 1.0), ("Roomboter", "Kokosbrood", 0.9),
     ("Banaan", HAGEL, 0.7), ("Banaan", CHOCO, 0.9), ("Hazelnootpasta", ["Banaan", "Aardbeien"], 1.0),
@@ -573,7 +584,7 @@ OVERRIDES = [
 ]
 
 
-def build():
+def parse_items():
     items = []
     for line in ITEMS.strip().splitlines():
         name, en, cat, tags = line.split("|")
@@ -581,8 +592,20 @@ def build():
         items.append({"name": name, "en": en, "cat": cat, "tags": tags.split()})
     names = [it["name"] for it in items]
     assert len(set(names)) == len(names), "duplicate names"
-    idx = {n: i for i, n in enumerate(names)}
+    prof = {}
+    for line in PROFILES.strip().splitlines():
+        name, digits, cuisines = line.split("|")
+        assert name in names, ("profile for unknown topping", name)
+        assert len(digits) == len(DIMS) and digits.isdigit() and max(digits) <= "3", line
+        prof[name] = ([int(d) for d in digits], cuisines.split())
+    missing = [n for n in names if n not in prof]
+    assert not missing, ("toppings without a flavour profile", missing)
+    for it in items:
+        it["flavour"], it["cuisine"] = prof[it["name"]]
+    return items
 
+
+def rule_matrix(items):
     base = {}
     for i, a in enumerate(CATS):
         for j, b in enumerate(CATS[i:]):
@@ -593,7 +616,7 @@ def build():
         return it["cat"] == val if kind == "c" else val in it["tags"]
 
     n = len(items)
-    M = [[0.0] * n for _ in range(n)]
+    R = np.zeros((n, n))
     for i in range(n):
         for j in range(i + 1, n):
             a, b = items[i], items[j]
@@ -601,35 +624,172 @@ def build():
             for x, y, d in RULES:
                 if (has(a, x) and has(b, y)) or (has(a, y) and has(b, x)):
                     s += d
-            M[i][j] = M[j][i] = max(-1.0, min(1.0, s))
+            R[i, j] = R[j, i] = max(-1.0, min(1.0, s))
+    return R
 
+
+CLASSIC_PAIR = 0.7
+
+
+def hand_set(items):
+    """Every hand-set pair: OVERRIDES, then CLASHES, then pairs from CLASSICS. Returns {(i, j): value} with i < j."""
+    idx = {it["name"]: i for i, it in enumerate(items)}
     as_list = lambda v: v if isinstance(v, list) else [v]
-    for xs, ys, v in OVERRIDES:
-        for x in as_list(xs):
-            for y in as_list(ys):
-                assert x in idx and y in idx, (x, y)
-                if x != y:
-                    M[idx[x]][idx[y]] = M[idx[y]][idx[x]] = v
+    labels, source = {}, {}
+    for kind, table in (("override", OVERRIDES), ("clash", CLASHES)):
+        for xs, ys, v in table:
+            for x in as_list(xs):
+                for y in as_list(ys):
+                    assert x in idx and y in idx, (x, y)
+                    if x == y:
+                        continue
+                    key = tuple(sorted((idx[x], idx[y])))
+                    if kind == "clash" and source.get(key) == "override" and abs(labels[key] - v) > 0.5:
+                        print(f"  note: clash {x} × {y} = {v} disagrees with override {labels[key]}; keeping the override")
+                        continue
+                    labels[key], source[key] = v, kind
+    # every pair inside a classic sandwich works, at least in that company: e.g. honey with rocket on a brie roll
+    for name, members in CLASSICS:
+        for x in members:
+            for y in members:
+                if x < y:
+                    key = tuple(sorted((idx[x], idx[y])))
+                    if source.get(key) == "clash":
+                        print(f"  note: {name} has {x} × {y}, which is listed as a clash; keeping the clash")
+                    elif labels.get(key, -1) < CLASSIC_PAIR:
+                        labels[key], source[key] = CLASSIC_PAIR, "classic"
+    return labels
 
-    S = [[round(M[i][j] * 10) if i != j else 0 for j in range(n)] for i in range(n)]
+
+CUISINES = ["nl", "snack", "sw", "it", "med", "fr", "us", "as"]
+
+
+def features(items, R):
+    """Feature tensor for every pair: flavour interactions, strength gap, cuisine fit, rule score."""
+    n, d = len(items), len(DIMS)
+    P = np.array([it["flavour"] for it in items], float) / 3
+    C = np.array([[c in it["cuisine"] for c in CUISINES] for it in items], float)
+    uni = np.array(["uni" in it["cuisine"] for it in items])
+    st = P[:, DIMS.index("strength")]
+    tri = [(a, b) for a in range(d) for b in range(a, d)]
+    ctri = [(a, b) for a in range(len(CUISINES)) for b in range(a, len(CUISINES))]
+    cols = []
+    for a, b in tri:  # symmetric flavour interactions: does sweet meet salty, fat meet sour, ...
+        cols.append(np.outer(P[:, a], P[:, b]) + (np.outer(P[:, b], P[:, a]) if a != b else np.outer(P[:, a], P[:, b])))
+    cols.append(np.abs(st[:, None] - st[None, :]))  # one drowns the other
+    cols.append(st[:, None] + st[None, :])
+    share = (C @ C.T > 0).astype(float)
+    either_uni = (uni[:, None] | uni[None, :]).astype(float)
+    cols.append(share)
+    cols.append(either_uni)
+    for a, b in ctri:  # cuisine pairs: italian with asian, snack bar with french, ...
+        m = np.outer(C[:, a], C[:, b])
+        cols.append(m + m.T if a != b else m)
+    cols.append(R)
+    cat = np.array([it["cat"] for it in items])
+    cols.append((cat[:, None] == cat[None, :]).astype(float))
+    return np.stack(cols, axis=-1)
+
+
+def ridge(X, y, lam, sw=None):
+    """Weighted ridge regression with an unpenalised intercept."""
+    sw = np.ones(len(y)) if sw is None else sw
+    Xb = np.hstack([X, np.ones((len(X), 1))])
+    A = (Xb * sw[:, None]).T @ Xb + lam * np.diag([1.0] * X.shape[1] + [0.0])
+    return np.linalg.solve(A, (Xb * sw[:, None]).T @ y)
+
+
+def predict(w, X):
+    return X @ w[:-1] + w[-1]
+
+
+def learn(items, R, labels, folds=5, seed=7, anchor=0.005, anchor_clash=0.3, lam=3.0, max_shift=0.6, cap=0.8, verbose=True):
+    """Learn corrections to the rule score from flavour profiles.
+
+    The model predicts label - rule. Hand-set pairs are the evidence; every other pair is anchored to
+    "no correction" with a small weight (a larger one for outright rule clashes), so the model only moves scores where the profiles say so and
+    the hand-set pairs (which lean towards good combinations) cannot drag the whole matrix upwards.
+    An estimate moves at most `max_shift` away from the rules and never above `cap`: only a hand-set
+    pair can be perfect. Reports cross-validated quality on held-out hand-set pairs against the rules alone.
+    """
+    estimate = lambda r, d: np.clip(r + np.clip(d, -max_shift, max_shift), -1, cap)
+    n = len(items)
+    F = features(items, R)
+    keys = list(labels)
+    X = np.array([F[i, j] for i, j in keys])
+    y = np.array([labels[k] for k in keys])
+    r = np.array([R[i, j] for i, j in keys])
+    iu = np.triu_indices(n, 1)
+    free = np.ones((n, n), bool)
+    for i, j in keys:
+        free[i, j] = False
+    sel = free[iu]
+    Xa = F[iu][sel]
+    # clear clashes by the rules (sweet against savoury) are held firmly; everything else loosely
+    ya, wa = np.zeros(len(Xa)), np.where(R[iu][sel] <= -0.8, anchor_clash, anchor)
+
+    def fit(mask):
+        return ridge(np.vstack([X[mask], Xa]), np.concatenate([y[mask] - r[mask], ya]), lam, np.concatenate([np.ones(mask.sum()), wa]))
+
+    def report(pred):
+        good, bad = pred[y >= 0.6], pred[y <= 0.0]
+        auc = (good[:, None] > bad[None, :]).mean() + 0.5 * (good[:, None] == bad[None, :]).mean()
+        fake = ((pred >= 0.6) & (y <= 0.2)).sum() / max(1, (y <= 0.2).sum())
+        return f"RMSE {np.sqrt(((pred - y) ** 2).mean()):.3f} · ranks good above bad {auc:.1%} · bad pairs passed off as good {fake:.1%}"
+
+    if verbose:
+        fold = np.random.default_rng(seed).permutation(len(keys)) % folds
+        pred = np.zeros(len(y))
+        for f in range(folds):
+            w = fit(fold != f)
+            pred[fold == f] = estimate(r[fold == f], predict(w, X[fold == f]))
+        print(f"  {len(y)} hand-set pairs, {folds}-fold cross-validation")
+        print(f"  rules only   : {report(np.clip(r, -1, 1))}")
+        print(f"  flavour model: {report(pred)}")
+    w = fit(np.ones(len(y), bool))
+    return estimate(R, predict(w, F.reshape(-1, F.shape[-1])).reshape(R.shape))
+
+
+def build():
+    items = parse_items()
+    idx = {it["name"]: i for i, it in enumerate(items)}
+    n = len(items)
+    R = rule_matrix(items)
+    labels = hand_set(items)
+    M = learn(items, R, labels)
+    M = (M + M.T) / 2
+    known = np.zeros((n, n), bool)
+    for (i, j), v in labels.items():
+        M[i, j] = M[j, i] = v
+        known[i, j] = known[j, i] = True
+
+    S = [[int(round(M[i, j] * 10)) if i != j else 0 for j in range(n)] for i in range(n)]
 
     # self-check
     s = lambda a, b: S[idx[a]][idx[b]]
     assert all(S[i][j] == S[j][i] and -10 <= S[i][j] <= 10 for i in range(n) for j in range(n))
-    assert s("Roomboter", "Hagelslag melk") == 10
-    assert s("Gekookte ham", "Jonge kaas") == 10
+    assert s("Roomboter", "Hagelslag melk") >= 9
+    assert s("Gekookte ham", "Jonge kaas") >= 9
     assert s("Hagelslag melk", "Hollandse nieuwe haring") <= -9
     assert s("Kruidenboter", "Aardbeienjam") <= -9
     assert s("Pindakaas", "Sambal oelek") >= 8
     assert s("Katenspek", "Zaanse mosterd") >= 8
-    assert s("Katenspek", "Hagelslag melk") <= -9
-    return items, S
+    assert s("Katenspek", "Hagelslag melk") <= -7
+    assert s("Hollandse nieuwe haring", "Basilicum") < 0
+
+    classics = []
+    for name, members in CLASSICS:
+        assert all(m in idx for m in members), (name, [m for m in members if m not in idx])
+        classics.append({"name": name, "set": [idx[m] for m in members]})
+    K = [[i, j] for i in range(n) for j in range(i + 1, n) if known[i, j]]
+    return items, S, K, classics
 
 
 if __name__ == "__main__":
-    items, S = build()
+    items, S, K, classics = build()
     with open("data.js", "w", encoding="utf-8") as f:
-        f.write("// generated by build.py — scores are integers -10..10 (= -1.0..1.0)\n")
-        f.write("const DATA = " + json.dumps({"cats": CATS, "items": items, "S": S}, ensure_ascii=False, separators=(",", ":")) + ";\n")
+        f.write("// generated by build.py — scores are integers -10..10 (= -1.0..1.0); K = hand-set pairs\n")
+        data = {"cats": CATS, "dims": DIMS, "items": items, "S": S, "K": K, "classics": classics}
+        f.write("const DATA = " + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n")
     flat = [v for i, r in enumerate(S) for j, v in enumerate(r) if i < j]
-    print(f"{len(items)} items, {len(flat)} pairs; >=+5: {sum(v >= 5 for v in flat)}, <=-5: {sum(v <= -5 for v in flat)}")
+    print(f"{len(items)} items, {len(flat)} pairs ({len(K)} hand-set); >=+5: {sum(v >= 5 for v in flat)}, <=-5: {sum(v <= -5 for v in flat)}")

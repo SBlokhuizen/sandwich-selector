@@ -110,6 +110,23 @@ h3 { font-size: 15px; margin: 0 0 8px; }
 .mini { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12.5px; color: var(--muted); }
 .mini b { font-variant-numeric: tabular-nums; }
 
+.lbl { min-width: 128px; }
+.mini-combo { flex: 1; min-width: 180px; max-width: 280px; }
+.mini-combo input { padding: 7px 12px 7px 34px; font-size: 14px; border-radius: 10px; box-shadow: none; }
+.mini-combo::before { left: 12px; font-size: 16px; }
+.chip.never { text-decoration: line-through; text-decoration-color: var(--bad); }
+.sandwich .layers .chip.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.why { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.why .neg { color: var(--bad); font-weight: 600; font-variant-numeric: tabular-nums; }
+.swap { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
+.swap .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.delta { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; }
+.card-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.btn.small { padding: 5px 10px; font-size: 13px; border-radius: 8px; }
+.surprise-card { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow); }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 60; }
+.toast.on { opacity: 1; transform: translateX(-50%); }
+
 /* matrix & graph */
 .viz { position: relative; overflow: auto; }
 canvas { display: block; }
@@ -144,6 +161,7 @@ tbody tr:hover { background: var(--surface-2); }
   .pair { grid-template-columns: minmax(0, 1fr) 80px 56px; }
   .pair .name span { display: none; }
   .side { position: static; width: auto; margin-top: 12px; }
+  .lbl { min-width: 0; }
 }
 </style>
 </head>
@@ -173,12 +191,17 @@ tbody tr:hover { background: var(--surface-2); }
 
   <section id="tab-build" role="tabpanel">
     <h1>Build a sandwich</h1>
-    <p class="lead">Add the toppings you want (or none at all) and get combinations where <i>every</i> ingredient goes well with every other one. Butter is assumed, so it is never suggested on its own.</p>
+    <p class="lead">Add the toppings you want (or none at all) and get combinations where <i>every</i> ingredient goes well with every other one. Butter is assumed, so it is never suggested on its own. Click a topping on a suggestion to swap it for something else.</p>
     <div class="card stack">
       <div class="combo"><input id="bq" placeholder="Add a topping you want on it…" aria-label="Add a topping"></div>
-      <div class="row"><span class="muted small">Must include:</span><div class="chips" id="seeds"></div></div>
-      <div class="row"><span class="muted small">Toppings per sandwich:</span><div class="seg" id="size"></div></div>
+      <div class="row"><span class="muted small lbl">Must include:</span><div class="chips" id="seeds"></div></div>
+      <div class="row"><span class="muted small lbl">Never include:</span><div class="chips" id="nevers"></div><div class="combo mini-combo"><input id="nq" placeholder="Leave out…" aria-label="Leave out a topping"></div></div>
+      <div class="row" style="justify-content:space-between">
+        <div class="row"><span class="muted small lbl">Toppings per sandwich:</span><div class="seg" id="size"></div></div>
+        <div class="row"><button class="btn ghost" id="share-build" title="Copy a link to these settings">Copy link</button><button class="btn" id="surprise">🎲 Surprise me</button></div>
+      </div>
     </div>
+    <div id="surprise-out" style="margin-top:18px" hidden></div>
     <div id="results" class="grid g2" style="margin-top:18px"></div>
   </section>
 
@@ -210,6 +233,7 @@ tbody tr:hover { background: var(--surface-2); }
   </section>
 </main>
 <div class="tip" id="tip"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const { items, S, cats } = DATA;
@@ -239,17 +263,42 @@ function buildPalette() {
 const scoreColor = (v) => PAL[v + 10];
 
 // ---------- derived analysis state ----------
-let thr = 7, bad = -5, G;
+const BUTTER = new Set(d3.range(N).filter((i) => items[i].cat === "butter"));
+const DETAIL = { coarse: 1.1, normal: 1.6, fine: 1.9 };
+let thr = 7, bad = -5, detail = "normal", G;
 function recompute() {
   const adj = Analysis.goodAdj(S, thr);
-  const comm = Analysis.louvain(S, thr);
+  // butter goes with everything, so it would only blur the clusters: it sits out as the base layer
+  const comm = Analysis.communities(S, { thr, bad, gamma: DETAIL[detail], skip: BUTTER });
+  const size = (c) => comm.filter((x) => x === c).length;
+  // a topping without good partners joins, loosely, the cluster it scores best with on average
+  const loose = new Set();
+  const clusters = [...new Set(comm)].filter((c) => size(c) > 1);
+  const core = comm.slice();
+  d3.range(N).forEach((i) => {
+    if (BUTTER.has(i) || size(core[i]) > 1) return;
+    const [best, avg] = clusters.map((c) => [c, d3.mean(d3.range(N).filter((j) => core[j] === c), (j) => S[i][j])]).sort((a, b) => b[1] - a[1])[0] || [];
+    if (avg >= 2) { comm[i] = best; loose.add(i); }
+  });
   const commSize = [];
   comm.forEach((c) => (commSize[c] = (commSize[c] || 0) + 1));
-  G = { adj, comm, commSize, stats: Analysis.nodeStats(S, adj, bad), comps: Analysis.components(adj), bridges: Analysis.bridges(adj) };
-  G.commName = commSize.map((_, c) => {
+  G = { adj, comm, commSize, loose, stats: Analysis.nodeStats(S, adj, bad), comps: Analysis.components(adj), bridges: Analysis.bridges(adj) };
+  // name a cluster after its most central main topping and its most central partner of another kind
+  G.commName = commSize.map((s, c) => {
+    if (s === 1) return "";
+    const m = d3.range(N).filter((i) => comm[i] === c && !loose.has(i));
+    // distinctive: scores high inside the cluster and low outside it
+    const inside = new Set(m), outside = d3.range(N).filter((j) => !inside.has(j) && !BUTTER.has(j));
+    const pull = (i) => d3.mean(m, (j) => (j !== i ? S[i][j] : NaN)) - d3.mean(outside, (j) => S[i][j]);
+    m.sort((a, b) => pull(b) - pull(a));
+    const first = m.find((i) => Analysis.MAIN.has(items[i].cat)) ?? m[0];
+    const second = m.find((i) => items[i].cat !== items[first].cat) ?? m.find((i) => i !== first);
+    return [first, second].filter((i) => i !== undefined).map((i) => items[i].name).join(" & ");
+  });
+  G.commKind = commSize.map((s, c) => {
     const count = {};
     comm.forEach((x, i) => x === c && (count[items[i].cat] = (count[items[i].cat] || 0) + 1));
-    return Object.entries(count).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => CAT[k][0]).join(" + ");
+    return Object.entries(count).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => CAT[k][0]).join(", ");
   });
 }
 const commColor = (c) => (G.commSize[c] > 1 ? COMM_COLORS[c % COMM_COLORS.length] : "#adb5bd");
@@ -295,8 +344,10 @@ function show(t) {
   render();
 }
 function route() {
-  const [t, arg] = decodeURIComponent(location.hash.slice(1)).split(":");
+  const [path, query] = location.hash.slice(1).split("?");
+  const [t, arg] = decodeURIComponent(path).split(":");
   if (t === "search" && arg) current = items.findIndex((it) => it.name === arg);
+  if (t === "build" && query !== undefined) loadBuild(query);
   show(["search", "build", "graph", "matrix", "analysis"].includes(t) ? t : "search");
 }
 const openItem = (i) => { location.hash = "search:" + encodeURIComponent(items[i].name); window.scrollTo({ top: 0, behavior: "smooth" }); };
@@ -337,7 +388,7 @@ function renderSearch() {
           <div class="muted">${esc(it.en)}</div>
           <div class="chips" style="margin-top:10px">
             <span class="chip">${dot(CAT[it.cat][1])}${CAT[it.cat][0]}</span>
-            <span class="chip" title="Cluster found by community detection">${dot(commColor(c))}${G.commSize[c] > 1 ? "Cluster: " + esc(G.commName[c]) : "No cluster (loner)"}</span>
+            <span class="chip" title="${G.commSize[c] > 1 ? esc(G.commKind[c]) : ""}">${dot(commColor(c))}${BUTTER.has(i) ? "Base layer: goes under anything" : G.commSize[c] > 1 ? (G.loose.has(i) ? "Loosely in: " : "Cluster: ") + esc(G.commName[c]) : "No cluster (loner)"}</span>
           </div>
         </div>
         <button class="btn" id="to-build">Build a sandwich with this →</button>
@@ -356,44 +407,144 @@ function renderSearch() {
       </div>
       <div class="pairs">${others.map((j) => pairRow(j, S[i][j])).join("")}</div>
     </div>`;
-  $("#to-build").onclick = () => { seeds = [i]; location.hash = "build"; };
+  $("#to-build").onclick = () => { seeds = [i]; nevers = nevers.filter((x) => x !== i); swapOpen = surprise = null; location.hash = "build"; };
   el.querySelectorAll("[data-cat]").forEach((ch) => (ch.onclick = () => { catFilter = ch.dataset.cat || null; renderSearch(); }));
 }
 
-// ---------- Build tab ----------
-let seeds = [], size = 3;
-const BUTTER = new Set(d3.range(N).filter((i) => items[i].cat === "butter"));
+// ---------- Build tab (#build?with=A,B&without=C&n=3) ----------
+const E = Analysis.engine(S, items);
+let seeds = [], nevers = [], size = 3, swapOpen = null, surprise = null, surpriseSeed = 1, resCache = {};
+const byName = (n) => items.findIndex((it) => it.name === n);
+const parseList = (v) => [...new Set((v ? v.split(",") : []).map(byName).filter((i) => i >= 0))];
+function buildQuery(w = seeds, n = size, withNevers = true) {
+  const p = new URLSearchParams();
+  if (w.length) p.set("with", w.map((i) => items[i].name).join(","));
+  if (withNevers && nevers.length) p.set("without", nevers.map((i) => items[i].name).join(","));
+  p.set("n", n);
+  return "build?" + p;
+}
+function loadBuild(q) {
+  const p = new URLSearchParams(q);
+  seeds = parseList(p.get("with"));
+  nevers = parseList(p.get("without")).filter((i) => !seeds.includes(i) && !BUTTER.has(i));
+  const n = +p.get("n");
+  if (n >= 2 && n <= 5) size = n;
+  swapOpen = surprise = null;
+}
+const linkTo = (q) => location.href.split("#")[0] + "#" + q;
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 1800);
+}
+async function copyLink(url) {
+  try { await navigator.clipboard.writeText(url); }
+  catch {
+    const ta = Object.assign(document.createElement("textarea"), { value: url });
+    document.body.append(ta); ta.select();
+    const ok = document.execCommand("copy"); ta.remove();
+    if (!ok) return prompt("Copy this link:", url);
+  }
+  toast("Link copied");
+}
+const excluded = () => new Set([...BUTTER, ...nevers]);
+// settings changed: forget the open swap panel and surprise
+const changed = () => { swapOpen = surprise = null; renderBuild(); };
+
 $("#size").innerHTML = [2, 3, 4, 5].map((n) => `<button data-n="${n}">${n}</button>`).join("");
-$("#size").onclick = (e) => { const b = e.target.closest("button"); if (b) { size = +b.dataset.n; renderBuild(); } };
-combo($("#bq"), (i) => { if (!seeds.includes(i)) seeds.push(i); renderBuild(); }, (i) => !seeds.includes(i));
+$("#size").onclick = (e) => { const b = e.target.closest("button"); if (b) { size = +b.dataset.n; changed(); } };
+combo($("#bq"), (i) => { if (!seeds.includes(i)) seeds.push(i); nevers = nevers.filter((x) => x !== i); changed(); }, (i) => !seeds.includes(i));
+combo($("#nq"), (i) => { if (!nevers.includes(i)) nevers.push(i); seeds = seeds.filter((x) => x !== i); changed(); }, (i) => !nevers.includes(i) && !BUTTER.has(i));
+$("#share-build").onclick = () => copyLink(linkTo(buildQuery()));
+$("#surprise").onclick = () => {
+  const n = seeds.length >= size ? Math.min(5, seeds.length + 1) : size;
+  if (seeds.length >= n) return toast("Remove a topping to leave room for a surprise");
+  const r = Analysis.suggest(E, seeds, n, { count: 1, exclude: excluded(), noise: 0.08, seed: surpriseSeed++ * 7717 });
+  if (!r.length) return toast("Nothing left to surprise you with");
+  surprise = r[0].set;
+  if (swapOpen && swapOpen.key === "s") swapOpen = null;
+  renderBuild();
+  $("#surprise-out").scrollIntoView({ behavior: "smooth", block: "nearest" });
+};
+
+const pct = (x) => Math.round(x * 100) + "%";
+const scoreTone = (x) => (x >= 0.4 ? "var(--good)" : x <= -0.4 ? "var(--bad)" : "var(--muted)");
+function penaltyText(p) {
+  const A = p.a !== undefined ? esc(items[p.a].name) : "", B = p.b !== undefined ? esc(items[p.b].name) : "";
+  if (p.kind === "twin") return `${A} and ${B} do the same job`;
+  if (p.kind === "double") return `two of a kind: ${A} and ${B} (${CAT[items[p.a].cat][0].toLowerCase()})`;
+  return "nothing to carry it, only sides and sauces";
+}
+function sandwichCard({ set, score, harmony, penalties, weakest, pairs }, title, key, { mine = false, cls = "" } = {}) {
+  const why = [];
+  if (weakest && set.length > 2) why.push(`<span>Weakest link: ${esc(items[weakest[0]].name)} × ${esc(items[weakest[1]].name)} <b style="color:${scoreColor(weakest[2])}">${fmt(weakest[2])}</b></span>`);
+  if (penalties.length) why.push(`<span>Taste ${pct(harmony)}, then:</span>`, ...penalties.map((p) => `<span><span class="neg">−${pct(p.value)}</span> ${penaltyText(p)}</span>`));
+  const open = swapOpen && swapOpen.key === key ? swapOpen.k : -1;
+  let swap = "";
+  if (open >= 0) {
+    const it = set[open], opts = Analysis.swaps(E, set, open, { exclude: excluded(), count: 8 });
+    swap = `<div class="swap"><div class="row" style="justify-content:space-between"><span class="small"><b>Swap ${esc(items[it].name)}</b> for…</span><span class="small"><a href="#" data-open="${it}">all its pairings</a> · <a href="#" data-never="${it}">never include</a></span></div>
+      <div class="opts">${opts.map((o) => `<span class="chip" data-pick="${o.set.join(",")}" title="New score ${pct(o.score)}">${catDot(o.item)}${esc(items[o.item].name)} <span class="delta" style="color:${o.delta > 0.005 ? "var(--good)" : o.delta < -0.005 ? "var(--bad)" : "var(--muted)"}">${o.delta >= 0 ? "+" : "−"}${pct(Math.abs(o.delta))}</span></span>`).join("")}</div></div>`;
+  }
+  const sorted = pairs.slice().sort((p, q) => q[2] - p[2]);
+  return `<div class="card sandwich ${cls}" data-key="${key}" data-set="${set.join(",")}">
+    <div class="row" style="justify-content:space-between"><h3 style="margin:0">${title}</h3><span class="score" style="color:${scoreTone(score)}" title="Pair harmony minus deductions">${pct(score)} harmony</span></div>
+    <div class="meter"><i style="width:${Math.max(0, score) * 100}%"></i></div>
+    <div class="layers">${set.map((i, k) => `<span class="chip ${seeds.includes(i) ? "on" : ""} ${k === open ? "sel" : ""}" data-swap="${k}" title="Swap ${esc(items[i].name)}">${catDot(i)}${esc(items[i].name)} <span class="x">⇄</span></span>`).join("")}</div>
+    ${swap}
+    ${why.length ? `<div class="why">${why.join("")}</div>` : ""}
+    <div class="mini">${sorted.map(([a, b, v]) => `<span>${esc(items[a].name)} × ${esc(items[b].name)}</span><b style="color:${scoreColor(v)}">${fmt(v)}</b>`).join("")}</div>
+    <div class="card-actions">${key === "s" ? `<button class="btn ghost small" data-again>Again</button>` : ""}${mine ? "" : `<button class="btn ghost small" data-use>Make it mine</button>`}<button class="btn ghost small" data-copy>Copy link</button></div>
+  </div>`;
+}
 function renderBuild() {
   if (seeds.length > size) size = Math.min(5, seeds.length);
   $("#size").querySelectorAll("button").forEach((b) => b.classList.toggle("on", +b.dataset.n === size));
-  $("#seeds").innerHTML = seeds.map((i) => `<span class="chip on" data-rm="${i}">${catDot(i)}${esc(items[i].name)}<span class="x">✕</span></span>`).join("") || `<span class="muted small">nothing — surprise me</span>`;
-  $("#seeds").querySelectorAll("[data-rm]").forEach((ch) => (ch.onclick = () => { seeds = seeds.filter((s) => s !== +ch.dataset.rm); renderBuild(); }));
-  const res = seeds.length >= size ? [{ set: seeds, fit: Analysis.fit(S, seeds) }] : Analysis.suggest(S, items, seeds, size, 8, BUTTER);
-  $("#results").innerHTML = res.map(({ set, fit }, k) => {
-    const pairs = [];
-    for (let a = 0; a < set.length; a++) for (let b = a + 1; b < set.length; b++) pairs.push([set[a], set[b], S[set[a]][set[b]]]);
-    pairs.sort((p, q) => q[2] - p[2]);
-    return `<div class="card sandwich">
-      <div class="row" style="justify-content:space-between"><h3 style="margin:0">${seeds.length >= size ? "Your sandwich" : "Suggestion " + (k + 1)}</h3><span class="score" style="color:${fit >= 0.4 ? "var(--good)" : fit <= -0.4 ? "var(--bad)" : "var(--muted)"}">${Math.round(fit * 100)}% harmony</span></div>
-      <div class="meter"><i style="width:${Math.max(0, fit) * 100}%"></i></div>
-      <div class="layers">${set.map((i) => `<span class="chip ${seeds.includes(i) ? "on" : ""}" data-open="${i}">${catDot(i)}${esc(items[i].name)}</span>`).join("")}</div>
-      <div class="mini">${pairs.map(([a, b, v]) => `<span>${esc(items[a].name)} × ${esc(items[b].name)}</span><b style="color:${scoreColor(v)}">${fmt(v)}</b>`).join("")}</div>
-    </div>`;
-  }).join("") || `<div class="empty">No combinations found.</div>`;
+  $("#seeds").innerHTML = seeds.map((i) => `<span class="chip on" data-rm="${i}">${catDot(i)}${esc(items[i].name)}<span class="x">✕</span></span>`).join("") || `<span class="muted small">nothing, so anything goes</span>`;
+  $("#nevers").innerHTML = nevers.map((i) => `<span class="chip never" data-rmn="${i}">${catDot(i)}${esc(items[i].name)}<span class="x">✕</span></span>`).join("");
+  $("#seeds").querySelectorAll("[data-rm]").forEach((ch) => (ch.onclick = () => { seeds = seeds.filter((s) => s !== +ch.dataset.rm); changed(); }));
+  $("#nevers").querySelectorAll("[data-rmn]").forEach((ch) => (ch.onclick = () => { nevers = nevers.filter((s) => s !== +ch.dataset.rmn); changed(); }));
+  const mine = seeds.length >= size;
+  const key = [seeds, nevers, size].join("|");
+  const res = mine ? [{ set: seeds, ...Analysis.explain(E, seeds) }] : (resCache[key] ||= Analysis.suggest(E, seeds, size, { exclude: excluded() }));
+  $("#results").innerHTML = res.map((r, k) => sandwichCard(r, mine ? "Your sandwich" : "Suggestion " + (k + 1), "r" + k, { mine })).join("") || `<div class="empty">No combinations found. Try leaving fewer toppings out.</div>`;
+  const so = $("#surprise-out");
+  so.hidden = !surprise;
+  so.innerHTML = surprise ? sandwichCard({ set: surprise, ...Analysis.explain(E, surprise) }, "🎲 Surprise", "s", { cls: "surprise-card" }) : "";
+  if (tab === "build") history.replaceState(null, "", "#" + buildQuery());
 }
+for (const host of ["#results", "#surprise-out"]) $(host).addEventListener("click", (e) => {
+  const card = e.target.closest("[data-set]");
+  if (!card) return;
+  const set = card.dataset.set.split(",").map(Number), key = card.dataset.key, el = (sel) => e.target.closest(sel);
+  if (el("[data-swap]")) {
+    const k = +el("[data-swap]").dataset.swap;
+    swapOpen = swapOpen && swapOpen.key === key && swapOpen.k === k ? null : { key, k };
+    renderBuild();
+  } else if (el("[data-pick]")) {
+    seeds = el("[data-pick]").dataset.pick.split(",").map(Number); size = Math.min(5, Math.max(2, seeds.length));
+    changed(); window.scrollTo({ top: 0, behavior: "smooth" }); toast("Swapped. This is your sandwich now");
+  } else if (el("[data-never]")) {
+    e.preventDefault();
+    const i = +el("[data-never]").dataset.never;
+    nevers.push(i); seeds = seeds.filter((x) => x !== i); changed();
+  } else if (el("[data-use]")) {
+    seeds = set; size = Math.min(5, Math.max(2, set.length)); changed(); window.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (el("[data-copy]")) copyLink(linkTo(buildQuery(set, set.length, false)));
+  else if (el("[data-again]")) $("#surprise").click();
+});
 
 // ---------- shared threshold controls ----------
 document.querySelectorAll(".threshold-bar").forEach((bar) => {
   bar.innerHTML = `<label>Counts as a good pairing at ≥ <input type="range" min="3" max="10" data-k="thr"><output></output></label>
     <label>Counts as a clash at ≤ <input type="range" min="-10" max="-1" data-k="bad"><output></output></label>
+    <label>Cluster detail <span class="seg" data-k="detail">${Object.keys(DETAIL).map((k) => `<button data-v="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join("")}</span></label>
     <span class="muted small" data-summary></span>`;
 });
 function syncBars() {
   document.querySelectorAll(".threshold-bar").forEach((bar) => {
     bar.querySelectorAll("input").forEach((inp) => { inp.value = inp.dataset.k === "thr" ? thr : bad; inp.nextElementSibling.textContent = fmt(+inp.value); });
+    bar.querySelectorAll("[data-k=detail] button").forEach((b) => b.classList.toggle("on", b.dataset.v === detail));
     const edges = d3.sum(G.stats, (s) => s.degree) / 2;
     bar.querySelector("[data-summary]").textContent = `${edges} good pairs · ${G.commSize.filter((s) => s > 1).length} clusters`;
   });
@@ -402,26 +553,26 @@ document.querySelectorAll(".threshold-bar input").forEach((inp) => inp.addEventL
   if (inp.dataset.k === "thr") thr = +inp.value; else bad = +inp.value;
   recompute(); syncBars(); render();
 }));
+document.querySelectorAll(".threshold-bar [data-k=detail]").forEach((seg) => (seg.onclick = (e) => {
+  const b = e.target.closest("button");
+  if (!b || b.dataset.v === detail) return;
+  detail = b.dataset.v; graph.layoutKey = null;
+  recompute(); syncBars(); render();
+}));
 
 // ---------- Network tab ----------
-const graph = { colorBy: "comm", t: null, hover: -1, pinned: -1, find: -1, links: [] };
+const graph = { colorBy: "comm", t: null, hover: -1, pinned: -1, find: -1, links: [], layoutKey: null };
 const radius = (i) => 3 + Math.sqrt(G.stats[i].degree) * 0.9;
 const nodeColor = (i) => (graph.colorBy === "comm" ? commColor(G.comm[i]) : CAT[items[i].cat][1]);
+const isLoner = (i) => G.commSize[G.comm[i]] === 1 && !BUTTER.has(i);
 function initGraph() {
   const cv = $("#graph-canvas");
   graph.nodes = d3.range(N).map((i) => ({ i }));
   graph.sim = d3.forceSimulation(graph.nodes)
-    .force("charge", d3.forceManyBody().strength(-70).distanceMax(400))
-    .force("x", d3.forceX(0).strength(0.05)).force("y", d3.forceY(0).strength(0.05))
-    .force("collide", d3.forceCollide((d) => radius(d.i) + 1.5))
+    .force("charge", d3.forceManyBody().strength(-28).distanceMax(140))
+    .force("collide", d3.forceCollide((d) => radius(d.i) + 2).iterations(2))
     .on("tick", drawGraph)
-    .on("end", () => { // zoom to fit once, after the first layout settles
-      if (graph.fitted || tab !== "graph") return;
-      graph.fitted = true;
-      const [x0, x1] = d3.extent(graph.nodes, (n) => n.x), [y0, y1] = d3.extent(graph.nodes, (n) => n.y), w = cv.clientWidth, h = cv.clientHeight;
-      const k = Math.min(2, 0.9 * Math.min(w / (x1 - x0 + 40), h / (y1 - y0 + 40)));
-      d3.select(cv).transition().duration(700).call(graph.zoom.transform, d3.zoomIdentity.translate(w / 2, h / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2));
-    });
+    .on("end", () => { if (!graph.fitted && tab === "graph") { graph.fitted = true; zoomTo(d3.range(N), 700); } });
   graph.zoom = d3.zoom().scaleExtent([0.2, 6]).on("zoom", (e) => { graph.t = e.transform; drawGraph(); });
   d3.select(cv).call(graph.zoom).on("dblclick.zoom", null);
   const at = (e) => {
@@ -443,30 +594,76 @@ function initGraph() {
     renderSide();
   });
   $("#colorby").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; graph.colorBy = b.dataset.v; $("#colorby").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); drawGraph(); legendGraph(); };
+  $("#glegend").onclick = (e) => { const ch = e.target.closest("[data-comm]"); if (ch) zoomTo(d3.range(N).filter((i) => G.comm[i] === +ch.dataset.comm), 600); };
+}
+// zoom so the given nodes fill the canvas
+function zoomTo(ids, ms) {
+  const cv = $("#graph-canvas"), ns = ids.map((i) => graph.nodes[i]);
+  const [x0, x1] = d3.extent(ns, (n) => n.x), [y0, y1] = d3.extent(ns, (n) => n.y), w = cv.clientWidth, h = cv.clientHeight;
+  const k = Math.min(3, 0.9 * Math.min(w / (x1 - x0 + 60), h / (y1 - y0 + 60)));
+  d3.select(cv).transition().duration(ms).call(graph.zoom.transform, d3.zoomIdentity.translate(w / 2, h / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2));
 }
 function sizeGraph() {
   const cv = $("#graph-canvas"), dpr = devicePixelRatio || 1;
   cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
   if (!graph.t) d3.select(cv).call(graph.zoom.transform, d3.zoomIdentity.translate(cv.clientWidth / 2, cv.clientHeight / 2).scale(0.8));
 }
+// Each cluster gets a home on a ring, ordered so clusters that get along sit side by side.
+// Butter, which goes with everything, sits in the middle; loners drift on an outer ring.
+function clusterHomes() {
+  const cl = G.commSize.map((s, c) => c).filter((c) => G.commSize[c] > 1);
+  const mem = new Map(cl.map((c) => [c, d3.range(N).filter((i) => G.comm[i] === c)]));
+  const aff = (a, b) => d3.mean(mem.get(a), (i) => d3.mean(mem.get(b), (j) => S[i][j]));
+  const order = [cl[0]], left = new Set(cl.slice(1));
+  while (left.size) { const last = order[order.length - 1], next = [...left].sort((a, b) => aff(last, b) - aff(last, a))[0]; order.push(next); left.delete(next); }
+  const rad = (c) => 9 * Math.sqrt(G.commSize[c]) + 14;
+  const R = Math.max(110, d3.sum(order, (c) => 2 * rad(c) + 24) / (2 * Math.PI));
+  const home = new Map();
+  let ang = -Math.PI / 2;
+  const total = d3.sum(order, (c) => 2 * rad(c) + 24);
+  for (const c of order) {
+    const span = ((2 * rad(c) + 24) / total) * 2 * Math.PI;
+    home.set(c, [R * Math.cos(ang + span / 2), R * Math.sin(ang + span / 2)]);
+    ang += span;
+  }
+  return { home, R };
+}
 function updateGraphLinks() {
+  const { home, R } = clusterHomes();
+  graph.homes = home;
   graph.links = [];
   for (let a = 0; a < N; a++) for (const b of G.adj[a]) if (a < b) graph.links.push({ source: a, target: b, v: S[a][b] });
-  graph.sim.force("link", d3.forceLink(graph.links).distance(45).strength((l) => (0.6 * (l.v / 10)) / Math.sqrt(Math.min(G.stats[l.source.i ?? l.source].degree, G.stats[l.target.i ?? l.target].degree))));
-  graph.sim.alpha(0.7).restart();
-  graph.thr = thr;
+  const idx = (n) => n.i ?? n;
+  // links inside a cluster hold it together; links across clusters and to butter only tug gently
+  graph.sim.force("link", d3.forceLink(graph.links).distance(30).strength((l) => {
+    const a = idx(l.source), b = idx(l.target);
+    const w = BUTTER.has(a) || BUTTER.has(b) ? 0.01 : G.comm[a] === G.comm[b] ? 1 : 0.06;
+    return (w * 0.7 * (l.v / 10)) / Math.sqrt(Math.min(G.stats[a].degree, G.stats[b].degree));
+  }));
+  const target = (n, k) => (BUTTER.has(n.i) || isLoner(n.i) ? 0 : home.get(G.comm[n.i])[k]);
+  graph.sim
+    .force("x", d3.forceX((n) => target(n, 0)).strength((n) => (isLoner(n.i) ? 0 : G.loose.has(n.i) ? 0.06 : 0.12)))
+    .force("y", d3.forceY((n) => target(n, 1)).strength((n) => (isLoner(n.i) ? 0 : G.loose.has(n.i) ? 0.06 : 0.12)))
+    .force("ring", d3.forceRadial(R + 120).strength((n) => (isLoner(n.i) ? 0.2 : 0)));
+  graph.sim.alpha(0.9).restart();
+  graph.layoutKey = thr + "|" + bad + "|" + detail;
+  graph.fitted = false;
 }
+// label boxes are placed greedily in screen space; a label that would overlap one already placed is skipped
+const textW = new Map();
 function drawGraph() {
   const cv = $("#graph-canvas"), ctx = cv.getContext("2d"), dpr = devicePixelRatio || 1, t = graph.t;
   if (!t || tab !== "graph") return;
+  const W = cv.clientWidth, H = cv.clientHeight;
   const focus = graph.hover >= 0 ? graph.hover : graph.pinned;
   const near = focus >= 0 ? new Set([focus, ...G.adj[focus]]) : null;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
   ctx.translate(t.x, t.y); ctx.scale(t.k, t.k);
   const text = cssVar("--text"), muted = cssVar("--muted"), surface = cssVar("--surface");
   ctx.lineWidth = 0.6 / t.k;
-  ctx.strokeStyle = muted; ctx.globalAlpha = near ? 0.04 : 0.12;
+  ctx.strokeStyle = muted; ctx.globalAlpha = near ? 0.03 : 0.08;
   ctx.beginPath();
   for (const l of graph.links) { ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y); }
   ctx.stroke();
@@ -480,12 +677,55 @@ function drawGraph() {
     ctx.beginPath(); ctx.arc(n.x, n.y, radius(n.i), 0, 2 * Math.PI); ctx.fill();
     if (n.i === focus || n.i === graph.find) { ctx.lineWidth = 2.5 / t.k; ctx.strokeStyle = text; ctx.stroke(); }
   }
-  // labels: hubs when idle, focus neighbourhood when hovering
-  const hubs = graph.hubs || (graph.hubs = d3.range(N).sort((a, b) => G.stats[b].degree - G.stats[a].degree).slice(0, 18));
-  const labelled = near ? [...near] : t.k > 1.6 ? d3.range(N) : hubs;
-  ctx.font = `600 ${11 / t.k}px Inter, system-ui, sans-serif`; ctx.textAlign = "center";
-  ctx.lineWidth = 3 / t.k; ctx.strokeStyle = surface; ctx.fillStyle = text; ctx.globalAlpha = 1;
-  for (const i of labelled) { const n = graph.nodes[i], y = n.y - radius(i) - 4 / t.k; ctx.strokeText(items[i].name, n.x, y); ctx.fillText(items[i].name, n.x, y); }
+  ctx.restore();
+
+  const placed = [];
+  const free = (b) => b[0] >= 2 && b[1] >= 2 && b[2] <= W - 2 && b[3] <= H - 2 && !placed.some((p) => b[0] < p[2] && b[2] > p[0] && b[1] < p[3] && b[3] > p[1]);
+  const measure = (s, font) => { const k = font + s; if (!textW.has(k)) { ctx.font = font; textW.set(k, ctx.measureText(s).width); } return textW.get(k); };
+  ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+  function label(s, x, y, r, { font = "600 11px Inter, system-ui, sans-serif", size = 11, color = text, must = false, centred = false } = {}) {
+    const w = measure(s, font), h = size + 4;
+    // centred on the point, or above, below, right, left of the dot
+    const spots = centred ? [[x - w / 2, y - h / 2]] : [[x - w / 2, y - r - 3 - h], [x - w / 2, y + r + 3], [x + r + 4, y - h / 2], [x - r - 4 - w, y - h / 2]];
+    for (const [bx, by] of spots) {
+      const box = [bx, by, bx + w, by + h];
+      if (!free(box) && !must) continue;
+      placed.push(box);
+      ctx.font = font; ctx.lineWidth = 3.5; ctx.strokeStyle = surface; ctx.fillStyle = color; ctx.textAlign = "left";
+      ctx.strokeText(s, bx, by + h / 2); ctx.fillText(s, bx, by + h / 2);
+      return true;
+    }
+    return false;
+  }
+  ctx.globalAlpha = 1;
+  const scr = (i) => { const n = graph.nodes[i]; return [t.applyX(n.x), t.applyY(n.y), radius(i) * t.k]; };
+  // cluster names first when zoomed out and nothing is focused
+  if (!near && graph.colorBy === "comm" && t.k < 1.6 && graph.homes) {
+    // big clusters only, written just outside the cluster on the side facing away from the centre
+    for (const [c] of graph.homes) {
+      if (G.commSize[c] < 6) continue;
+      const m = d3.range(N).filter((i) => G.comm[i] === c && !G.loose.has(i)).map((i) => graph.nodes[i]);
+      const cx = d3.mean(m, (n) => n.x), cy = d3.mean(m, (n) => n.y), len = Math.hypot(cx, cy) || 1;
+      const ux = cx / len, uy = cy / len, reach = d3.max(m, (n) => (n.x - cx) * ux + (n.y - cy) * uy) + 10;
+      const font = "700 13px Inter, system-ui, sans-serif", w = measure(G.commName[c], font);
+      label(G.commName[c], t.applyX(cx + ux * reach) + (ux * w) / 2, t.applyY(cy + uy * reach) + uy * 9, 0, { font, size: 13, color: commColor(c), centred: true });
+    }
+  }
+  // dots that will carry labels count as obstacles, so names do not cover them
+  const order = near
+    ? [focus, ...G.adj[focus].slice().sort((a, b) => S[focus][b] - S[focus][a])]
+    : d3.range(N).sort((a, b) => G.stats[b].degree - G.stats[a].degree);
+  if (graph.find >= 0 && !near) order.unshift(graph.find);
+  const budget = near ? Infinity : Math.round(10 + 22 * t.k * t.k);
+  for (const i of order.slice(0, near ? order.length : budget)) { const [x, y, r] = scr(i); placed.push([x - r, y - r, x + r, y + r]); }
+  ctx.globalAlpha = 1;
+  let shown = 0;
+  for (const i of order) {
+    if (shown >= budget) break;
+    const [x, y, r] = scr(i);
+    if (x < -50 || y < -20 || x > W + 50 || y > H + 20) continue;
+    if (label(items[i].name, x, y, r, { must: i === focus })) shown++;
+  }
 }
 function renderSide() {
   const el = $("#gside"), i = graph.pinned;
@@ -493,7 +733,7 @@ function renderSide() {
   const top = G.adj[i].slice().sort((a, b) => S[i][b] - S[i][a]);
   el.hidden = false;
   el.innerHTML = `<div class="row" style="justify-content:space-between"><h3 style="margin:0">${esc(items[i].name)}</h3><button class="chip" id="gclose" aria-label="Close">✕</button></div>
-    <p class="muted small" style="margin:2px 0 10px">${esc(items[i].en)} · ${dot(commColor(G.comm[i]))} ${esc(G.commName[G.comm[i]] || "loner")}</p>
+    <p class="muted small" style="margin:2px 0 10px">${esc(items[i].en)} · ${dot(commColor(G.comm[i]))} ${BUTTER.has(i) ? "base layer" : esc(G.commName[G.comm[i]] || "loner")}</p>
     <div class="mini">${top.slice(0, 15).map((j) => `<span data-open="${j}" style="cursor:pointer">${esc(items[j].name)}</span><b style="color:${scoreColor(S[i][j])}">${fmt(S[i][j])}</b>`).join("") || "<span>No good partners at this threshold</span>"}</div>
     <button class="btn ghost" style="margin-top:12px;width:100%" data-open="${i}">Open all pairings →</button>`;
   $("#gclose").onclick = () => { graph.pinned = -1; renderSide(); drawGraph(); };
@@ -501,12 +741,12 @@ function renderSide() {
 function legendGraph() {
   $("#glegend").innerHTML = graph.colorBy === "cat"
     ? cats.map((k) => `<span class="chip">${dot(CAT[k][1])}${CAT[k][0]}</span>`).join("")
-    : G.commSize.map((s, c) => (s > 1 ? `<span class="chip">${dot(commColor(c))}${esc(G.commName[c])} <span class="muted">${s}</span></span>` : "")).join("");
+    : G.commSize.map((s, c) => (s > 1 ? `<span class="chip" data-comm="${c}" title="${esc(G.commKind[c])}. Click to zoom">${dot(commColor(c))}${esc(G.commName[c])} <span class="muted">${s}</span></span>` : "")).join("") + `<span class="chip" style="cursor:default">${dot("#adb5bd")}Butter (centre) &amp; loners (outer ring)</span>`;
 }
 function renderGraph() {
   if (!graph.sim) initGraph();
   sizeGraph();
-  if (graph.thr !== thr) { graph.hubs = null; updateGraphLinks(); } else if (graph.sim.alpha() > graph.sim.alphaMin()) graph.sim.restart();
+  if (graph.layoutKey !== thr + "|" + bad + "|" + detail) updateGraphLinks(); else if (graph.sim.alpha() > graph.sim.alphaMin()) graph.sim.restart();
   legendGraph(); renderSide(); drawGraph();
 }
 
@@ -537,7 +777,7 @@ function renderMatrix() {
   cv.style.cursor = "crosshair";
   $("#mlegend").innerHTML = morder === "cat"
     ? cats.map((k) => `<span class="chip">${dot(CAT[k][1])}${CAT[k][0]}</span>`).join("")
-    : G.commSize.map((s, c) => (s > 1 ? `<span class="chip">${dot(commColor(c))}${esc(G.commName[c])}</span>` : "")).join("") + `<span class="chip">${dot("#adb5bd")}Loners</span>`;
+    : G.commSize.map((s, c) => (s > 1 ? `<span class="chip">${dot(commColor(c))}${esc(G.commName[c])}</span>` : "")).join("") + `<span class="chip">${dot("#adb5bd")}Butter &amp; loners</span>`;
 }
 function tip(html, e) {
   const t = $("#tip");
@@ -591,9 +831,9 @@ function renderInsights() {
 
     <div class="card">
       <h2>Clusters</h2>
-      <p class="muted small">Community detection (Louvain) groups toppings that pair well with each other more than with the rest. The grid shows the average score <i>between</i> clusters — the diagonal is how well a cluster sticks together, red cells are clusters that clash.</p>
+      <p class="muted small">Signed community detection groups toppings that pair well with each other more than with the rest: good pairs pull toppings together, clashes push them apart, and every cluster is checked to be held together by good pairs. Butter goes with everything, so it stays out as the base layer; toppings with no good partner join the cluster they score best with on average (marked <i>loosely</i>). Each cluster is named after its two most central toppings. Use <b>Cluster detail</b> for fewer, broader or more, tighter groups. The grid shows the average score <i>between</i> clusters: the diagonal is how well a cluster sticks together, red cells are clusters that clash.</p>
       <div class="grid g2" style="margin-top:14px">
-        ${clusters.map((c, k) => `<div class="cluster" style="border-color:${commColor(c)}"><h3>${esc(commName(c))} <span class="muted">· ${commSize[c]}</span></h3><div class="chips">${members[k].sort((a, b) => stats[b].degree - stats[a].degree).slice(0, 14).map(name).join("")}${commSize[c] > 14 ? `<span class="muted small">+${commSize[c] - 14} more</span>` : ""}</div></div>`).join("")}
+        ${clusters.map((c, k) => `<div class="cluster" style="border-color:${commColor(c)}"><h3 style="margin-bottom:2px">${esc(commName(c))} <span class="muted">· ${commSize[c]}</span></h3><div class="muted small" style="margin-bottom:8px">${esc(G.commKind[c])}</div><div class="chips">${members[k].slice().sort((a, b) => G.loose.has(a) - G.loose.has(b) || stats[b].degree - stats[a].degree).slice(0, 14).map(name).join("")}${commSize[c] > 14 ? `<span class="muted small">+${commSize[c] - 14} more</span>` : ""}</div></div>`).join("")}
       </div>
       <div style="overflow:auto;margin-top:18px"><table class="cm">
         <tr><th></th>${shown.map((c, k) => `<th title="${esc(commName(c))}">${dot(commColor(c))} ${k + 1}</th>`).join("")}</tr>

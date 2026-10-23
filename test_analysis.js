@@ -52,4 +52,10 @@ const c = A.communities(DATA.S, { thr: 7, bad: -5, skip: butter });
 // every cluster member has a good partner inside its own cluster
 c.forEach((k, i) => { if (c.filter((x) => x === k).length > 1) assert(c.some((x, j) => j !== i && x === k && DATA.S[i][j] >= 7), DATA.items[i].name); });
 console.log("communities:", Math.max(...c) + 1, "| PB suggestions:", r.map((x) => x.set.map((i) => DATA.items[i].name).join(" + ")).join(" ; "));
+// every topping is drawn as itself on the animated sandwich, not as a generic fallback
+const Sandwich = require("./sandwich.js");
+const unlooked = DATA.items.filter((it) => !Sandwich.look(it).matched).map((it) => it.name);
+assert.deepStrictEqual(unlooked, [], "toppings without a look: " + unlooked.join(", "));
+assert.strictEqual(Sandwich.look({ name: "Haringsalade" }).kind, "blob");
+assert(!Sandwich.svg(DATA.items, DATA.items.map((_, i) => i)).svg.includes("NaN"));
 console.log("ok");

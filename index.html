@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <script src="data.js"></script>
 <script src="analysis.js"></script>
+<script src="sandwich.js"></script>
 <style>
 :root {
   --bg: #faf7f2; --surface: #ffffff; --surface-2: #f3eee6; --text: #1f1b16; --muted: #6f675c; --border: #e7dfd3;
@@ -29,6 +30,8 @@
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25); color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+a.brand { color: inherit; text-decoration: none; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 button, input, select { font: inherit; color: inherit; }
 a { color: var(--accent); }
@@ -36,7 +39,6 @@ a { color: var(--accent); }
 header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
 .top .wrap { display: flex; align-items: center; gap: 20px; height: 60px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em; font-size: 18px; white-space: nowrap; }
-.brand .logo { font-size: 24px; }
 nav.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1; }
 nav.tabs button { border: 0; background: none; padding: 8px 14px; border-radius: 999px; cursor: pointer; color: var(--muted); font-weight: 600; white-space: nowrap; transition: background .15s, color .15s; }
 nav.tabs button:hover { color: var(--text); background: var(--surface-2); }
@@ -132,6 +134,16 @@ h3 { font-size: 15px; margin: 0 0 8px; }
 .card-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .btn.small { padding: 5px 10px; font-size: 13px; border-radius: 8px; }
 .surprise-card { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow); }
+.build-top { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.stage { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px; }
+.stage .plate { height: 300px; width: 100%; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+.stage svg { max-width: 100%; height: auto; overflow: visible; }
+.stage .caption { text-align: center; font-size: 13.5px; color: var(--muted); min-height: 20px; }
+.drop { animation: drop .6s cubic-bezier(.3, .8, .4, 1) both; animation-delay: var(--d); }
+@keyframes drop { 0% { transform: translateY(-320px); opacity: 0; } 15% { opacity: 1; } 70% { transform: translateY(3px); } 85% { transform: translateY(-2px); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .drop { animation: none; } }
+.wild .meter i { background: var(--bad); }
+.sugg-toggle { margin-top: 18px; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 60; }
 .toast.on { opacity: 1; transform: translateX(-50%); }
 
@@ -164,6 +176,9 @@ tbody tr:hover { background: var(--surface-2); }
 .triple .no { color: var(--bad); font-weight: 700; }
 .empty { color: var(--muted); padding: 20px; text-align: center; }
 @media (max-width: 640px) {
+  .build-top { grid-template-columns: 1fr; }
+  .build-top .stage-card { order: -1; }
+  .stage .plate { height: 220px; }
   .top .wrap { height: auto; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; gap: 8px; }
   nav.tabs { order: 3; flex-basis: 100%; }
   .pair { grid-template-columns: minmax(0, 1fr) 80px 56px; }
@@ -176,7 +191,7 @@ tbody tr:hover { background: var(--surface-2); }
 <body>
 <header class="top">
   <div class="wrap">
-    <div class="brand"><span class="logo" aria-hidden="true">🥪</span>The Sandwich Selector</div>
+    <a class="brand" id="home" href="#search" title="Back to the start">The Sandwich Selector</a>
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="search">Pairings</button>
       <button role="tab" data-tab="build">Build a sandwich</button>
@@ -199,19 +214,23 @@ tbody tr:hover { background: var(--surface-2); }
 
   <section id="tab-build" role="tabpanel">
     <h1>Build a sandwich</h1>
-    <p class="lead">Add the toppings you want (or none at all) and get combinations where <i>every</i> ingredient goes well with every other one. Butter is assumed, so it is never suggested on its own. Click a topping on a suggestion to swap it for something else.</p>
+    <p class="lead">Stack the toppings you want and watch your sandwich grow. Ask for suggestions to get combinations where <i>every</i> ingredient goes well with every other one, or switch to Unhinged for ones where nothing does. Butter is assumed, so it is never suggested on its own.</p>
+    <div class="build-top">
     <div class="card stack">
       <div class="combo"><input id="bq" placeholder="Add a topping you want on it…" aria-label="Add a topping"></div>
       <div class="row"><span class="muted small lbl">Must include:</span><div class="chips" id="seeds"></div></div>
       <div class="row"><span class="muted small lbl">Never include:</span><div class="chips" id="nevers"></div><div class="combo mini-combo"><input id="nq" placeholder="Leave out…" aria-label="Leave out a topping"></div></div>
       <div class="row" style="justify-content:space-between">
-        <div class="row"><span class="muted small lbl">Toppings per sandwich:</span><div class="seg" id="size"></div></div>
-        <div class="row"><label class="switch" title="Only pairs that were checked by hand (at +50 or better), or that the flavour model is very sure of (+80 or better)"><input type="checkbox" id="strict"> Proven pairs only</label><button class="btn ghost" id="share-build" title="Copy a link to these settings">Copy link</button><button class="btn" id="surprise">🎲 Surprise me</button></div>
+        <div class="row"><span class="muted small lbl">Toppings per sandwich:</span><div class="seg" id="size"></div><div class="seg" id="mode"><button data-w="">Tasty</button><button data-w="1">Unhinged</button></div></div>
+        <div class="row"><label class="switch" title="Only pairs that were checked by hand (at +50 or better), or that the flavour model is very sure of (+80 or better)"><input type="checkbox" id="strict"> Proven pairs only</label><button class="btn ghost" id="share-build" title="Copy a link to these settings">Copy link</button><button class="btn" id="surprise">Surprise me</button></div>
       </div>
       <div class="row" style="align-items:flex-start"><span class="muted small lbl" style="padding-top:5px">Or start from a classic:</span><div class="chips" id="classics" style="flex:1"></div></div>
     </div>
+    <div class="card stage stage-card"><div class="plate" id="plate"></div><div class="caption" id="stage-caption"></div></div>
+    </div>
     <div id="surprise-out" style="margin-top:18px" hidden></div>
-    <div id="results" class="grid g2" style="margin-top:18px"></div>
+    <button class="btn ghost sugg-toggle" id="sugg-toggle" aria-expanded="false"></button>
+    <div id="results" class="grid g2" style="margin-top:18px" hidden></div>
   </section>
 
   <section id="tab-graph" role="tabpanel">
@@ -356,7 +375,8 @@ function show(t) {
 function route() {
   const [path, query] = location.hash.slice(1).split("?");
   const [t, arg] = decodeURIComponent(path).split(":");
-  if (t === "search" && arg) current = items.findIndex((it) => it.name === arg);
+  const named = t === "search" && arg ? items.findIndex((it) => it.name === arg) : -1;
+  if (named >= 0) current = named;
   if (t === "build" && query !== undefined) loadBuild(query);
   show(["search", "build", "graph", "matrix", "analysis"].includes(t) ? t : "search");
 }
@@ -414,7 +434,7 @@ function renderSearch() {
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:10px">
-        <div class="row"><div class="seg" id="order"><button data-u="" class="${unhinged ? "" : "on"}">Best pairings</button><button data-u="1" class="${unhinged ? "on" : ""}">🤪 Unhinged pairings</button></div>
+        <div class="row"><div class="seg" id="order"><button data-u="" class="${unhinged ? "" : "on"}">Best pairings</button><button data-u="1" class="${unhinged ? "on" : ""}">Unhinged pairings</button></div>
           <span class="muted small">${unhinged ? "worst match first" : "best match first"}</span></div>
         <div class="chips"><span class="chip ${catFilter ? "" : "on"}" data-cat="">All</span>${cats.map((k) => `<span class="chip ${catFilter === k ? "on" : ""}" data-cat="${k}">${dot(CAT[k][1])}${CAT[k][0]}</span>`).join("")}</div>
       </div>
@@ -429,7 +449,11 @@ function renderSearch() {
 // ---------- Build tab (#build?with=A,B&without=C&n=3) ----------
 const E = Analysis.engine(S, items, { known: DATA.K || [], classics: DATA.classics || [] });
 const sure = (a, b) => !DATA.K || E.isKnown[a][b] === 1;
-let seeds = [], nevers = [], size = 3, strict = false, swapOpen = null, surprise = null, surpriseSeed = 1, resCache = {};
+let seeds = [], nevers = [], size = 3, strict = false, wild = false, showSugg = false, swapOpen = null, surprise = null, surpriseSeed = 1, resCache = {};
+// Unhinged: the same engine on flipped scores, so it hunts for sandwiches where every pair clashes.
+// Cuisines are blanked so that mixing them is not marked down there.
+let EU = null;
+const eng = () => (wild ? (EU ||= Analysis.engine(S.map((r) => r.map((v) => -v)), items.map((it) => ({ ...it, cuisine: [] })), { known: DATA.K || [] })) : E);
 const byName = (n) => items.findIndex((it) => it.name === n);
 const parseList = (v) => [...new Set((v ? v.split(",") : []).map(byName).filter((i) => i >= 0))];
 function buildQuery(w = seeds, n = size, withNevers = true) {
@@ -438,6 +462,7 @@ function buildQuery(w = seeds, n = size, withNevers = true) {
   if (withNevers && nevers.length) p.set("without", nevers.map((i) => items[i].name).join(","));
   p.set("n", n);
   if (withNevers && strict) p.set("proven", 1);
+  if (wild) p.set("unhinged", 1);
   return "build?" + p;
 }
 function loadBuild(q) {
@@ -447,6 +472,7 @@ function loadBuild(q) {
   const n = +p.get("n");
   if (n >= 2 && n <= 5) size = n;
   strict = p.get("proven") === "1";
+  wild = p.get("unhinged") === "1";
   swapOpen = surprise = null;
 }
 const linkTo = (q) => location.href.split("#")[0] + "#" + q;
@@ -476,10 +502,12 @@ combo($("#bq"), (i) => { if (!seeds.includes(i)) seeds.push(i); nevers = nevers.
 combo($("#nq"), (i) => { if (!nevers.includes(i)) nevers.push(i); seeds = seeds.filter((x) => x !== i); changed(); }, (i) => !nevers.includes(i) && !BUTTER.has(i));
 $("#share-build").onclick = () => copyLink(linkTo(buildQuery()));
 $("#strict").onchange = (e) => { strict = e.target.checked; changed(); };
+$("#mode").onclick = (e) => { const b = e.target.closest("button"); if (b) { wild = !!b.dataset.w; changed(); } };
+$("#sugg-toggle").onclick = () => { showSugg = !showSugg; renderBuild(); };
 $("#surprise").onclick = () => {
   const n = seeds.length >= size ? Math.min(5, seeds.length + 1) : size;
   if (seeds.length >= n) return toast("Remove a topping to leave room for a surprise");
-  const r = Analysis.suggest(E, seeds, n, { ...engineOpts(), count: 1, noise: 0.08, seed: surpriseSeed++ * 7717 });
+  const r = Analysis.suggest(eng(), seeds, n, { ...engineOpts(), count: 1, noise: 0.08, seed: surpriseSeed++ * 7717 });
   if (!r.length) return toast("Nothing left to surprise you with");
   surprise = r[0].set;
   if (swapOpen && swapOpen.key === "s") swapOpen = null;
@@ -518,27 +546,41 @@ function penaltyText(p) {
 const CLASSIC_WORD = { is: "Classic", extends: "Classic, extended:", part: "From the classic" };
 function sandwichCard({ set, score, harmony, penalties, weakest, pairs, classic, bonus }, title, key, { mine = false, cls = "" } = {}) {
   const why = [];
-  if (weakest && set.length > 2) why.push(`<span>Weakest link: ${esc(items[weakest[0]].name)} × ${esc(items[weakest[1]].name)} <b style="color:${scoreColor(weakest[2])}">${fmt(weakest[2])}</b></span>`);
-  if (penalties.length || bonus) why.push(`<span>Taste ${pct(harmony)}, then:</span>`, ...penalties.map((p) => `<span><span class="neg">−${pct(p.value)}</span> ${penaltyText(p)}</span>`));
+  // in unhinged mode the engine sees flipped scores; always show the real ones
+  if (weakest && set.length > 2) { const v = S[weakest[0]][weakest[1]]; why.push(`<span>${wild ? "Least unhinged pair" : "Weakest link"}: ${esc(items[weakest[0]].name)} × ${esc(items[weakest[1]].name)} <b style="color:${scoreColor(v)}">${fmt(v)}</b></span>`); }
+  if (penalties.length || bonus) why.push(`<span>${wild ? "Chaos" : "Taste"} ${pct(harmony)}, then:</span>`, ...penalties.map((p) => `<span><span class="neg">−${pct(p.value)}</span> ${penaltyText(p)}</span>`));
   if (bonus) why.push(`<span><span class="pos">+${pct(bonus)}</span> ${classic.kind === "part" ? "part of" : classic.kind === "extends" ? "builds on" : "is"} a classic: ${esc(classic.name)}</span>`);
   const open = swapOpen && swapOpen.key === key ? swapOpen.k : -1;
   let swap = "";
   if (open >= 0) {
-    const it = set[open], opts = Analysis.swaps(E, set, open, { ...engineOpts(), count: 8 });
+    const it = set[open], opts = Analysis.swaps(eng(), set, open, { ...engineOpts(), count: 8 });
     swap = `<div class="swap"><div class="row" style="justify-content:space-between"><span class="small"><b>Swap ${esc(items[it].name)}</b> for…</span><span class="small"><a href="#" data-open="${it}">all its pairings</a> · <a href="#" data-never="${it}">never include</a></span></div>
       <div class="opts">${opts.map((o) => `<span class="chip" data-pick="${o.set.join(",")}" title="New score ${pct(o.score)}">${catDot(o.item)}${esc(items[o.item].name)} <span class="delta" style="color:${o.delta > 0.005 ? "var(--good)" : o.delta < -0.005 ? "var(--bad)" : "var(--muted)"}">${o.delta >= 0 ? "+" : "−"}${pct(Math.abs(o.delta))}</span></span>`).join("")}</div></div>`;
   }
   const sorted = pairs.slice().sort((p, q) => q[2] - p[2]);
-  return `<div class="card sandwich ${cls}" data-key="${key}" data-set="${set.join(",")}">
-    <div class="row" style="justify-content:space-between"><h3 style="margin:0">${title}</h3><span class="score" style="color:${scoreTone(score)}" title="Pair harmony minus deductions, plus a bonus for classics">${pct(Math.min(1, score))} harmony</span></div>
+  return `<div class="card sandwich ${cls} ${wild ? "wild" : ""}" data-key="${key}" data-set="${set.join(",")}">
+    <div class="row" style="justify-content:space-between"><h3 style="margin:0">${title}</h3><span class="score" style="color:${wild ? "var(--bad)" : scoreTone(score)}" title="${wild ? "How badly the pairs clash, minus deductions" : "Pair harmony minus deductions, plus a bonus for classics"}">${pct(Math.min(1, score))} ${wild ? "unhinged" : "harmony"}</span></div>
     ${classic ? `<div><span class="badge">★ ${CLASSIC_WORD[classic.kind]} ${esc(classic.name)}</span></div>` : ""}
     <div class="meter"><i style="width:${Math.min(1, Math.max(0, score)) * 100}%"></i></div>
     <div class="layers">${set.map((i, k) => `<span class="chip ${seeds.includes(i) ? "on" : ""} ${k === open ? "sel" : ""}" data-swap="${k}" title="Swap ${esc(items[i].name)}">${catDot(i)}${esc(items[i].name)} <span class="x">⇄</span></span>`).join("")}</div>
     ${swap}
     ${why.length ? `<div class="why">${why.join("")}</div>` : ""}
-    <div class="mini">${sorted.map(([a, b, v, ok]) => `<span>${esc(items[a].name)} × ${esc(items[b].name)}</span><b style="color:${scoreColor(v)}" title="${ok ? "Hand-checked pair" : "Estimated from flavour profiles and recipe data"}">${ok ? "" : "≈ "}${fmt(v)}</b>`).join("")}</div>
+    <div class="mini">${sorted.map(([a, b, , ok]) => [a, b, S[a][b], ok]).map(([a, b, v, ok]) => `<span>${esc(items[a].name)} × ${esc(items[b].name)}</span><b style="color:${scoreColor(v)}" title="${ok ? "Hand-checked pair" : "Estimated from flavour profiles and recipe data"}">${ok ? "" : "≈ "}${fmt(v)}</b>`).join("")}</div>
     <div class="card-actions">${key === "s" ? `<button class="btn ghost small" data-again>Again</button>` : ""}${mine ? "" : `<button class="btn ghost small" data-use>Make it mine</button>`}<button class="btn ghost small" data-copy>Copy link</button></div>
   </div>`;
+}
+// The animated sandwich: toppings that were not on it before drop in, then the top slice lands again.
+let stageKey = null, onStage = [];
+function renderStage() {
+  const key = seeds.join(",") + (wild ? "|u" : "");
+  if (key !== stageKey) {
+    const fresh = seeds.flatMap((s, k) => (onStage.includes(s) ? [] : [k]));
+    $("#plate").innerHTML = Sandwich.svg(items, seeds, { fresh, topDrops: fresh.length > 0 }).svg;
+    stageKey = key; onStage = seeds.slice();
+  }
+  const x = seeds.length >= 2 && Analysis.explain(eng(), seeds);
+  $("#stage-caption").innerHTML = !seeds.length ? "Add a topping to start building" : seeds.length < 2 ? "Add another topping to see how they get on"
+    : `<b style="color:${wild ? "var(--bad)" : scoreTone(x.score)}">${pct(Math.min(1, x.score))} ${wild ? "unhinged" : "harmony"}</b>`;
 }
 function renderBuild() {
   if (seeds.length > size) size = Math.min(5, seeds.length);
@@ -549,12 +591,19 @@ function renderBuild() {
   $("#nevers").querySelectorAll("[data-rmn]").forEach((ch) => (ch.onclick = () => { nevers = nevers.filter((s) => s !== +ch.dataset.rmn); changed(); }));
   const mine = seeds.length >= size;
   $("#strict").checked = strict;
-  const key = [seeds, nevers, size, strict].join("|");
-  const res = mine ? [{ set: seeds, ...Analysis.explain(E, seeds) }] : (resCache[key] ||= Analysis.suggest(E, seeds, size, engineOpts()));
-  $("#results").innerHTML = res.map((r, k) => sandwichCard(r, mine ? "Your sandwich" : "Suggestion " + (k + 1), "r" + k, { mine })).join("") || `<div class="empty">${strict ? "No combinations where every pair is proven. Turn off <b>Proven pairs only</b> to include estimates." : "No combinations found. Try leaving fewer toppings out."}</div>`;
+  $("#mode").querySelectorAll("button").forEach((b) => b.classList.toggle("on", !!b.dataset.w === wild));
+  renderStage();
+  const tg = $("#sugg-toggle");
+  tg.textContent = `${showSugg ? "Hide" : "Show"} ${mine ? "the score breakdown" : wild ? "unhinged suggestions" : "suggestions"}`;
+  tg.setAttribute("aria-expanded", showSugg);
+  $("#results").hidden = !showSugg;
+  // suggestions are only searched for once someone asks to see them
+  const key = [seeds, nevers, size, strict, wild].join("|");
+  const res = !showSugg ? [] : mine ? [{ set: seeds, ...Analysis.explain(eng(), seeds) }] : (resCache[key] ||= Analysis.suggest(eng(), seeds, size, engineOpts()));
+  if (showSugg) $("#results").innerHTML = res.map((r, k) => sandwichCard(r, mine ? "Your sandwich" : "Suggestion " + (k + 1), "r" + k, { mine })).join("") || `<div class="empty">${strict ? "No combinations where every pair is proven. Turn off <b>Proven pairs only</b> to include estimates." : "No combinations found. Try leaving fewer toppings out."}</div>`;
   const so = $("#surprise-out");
   so.hidden = !surprise;
-  so.innerHTML = surprise ? sandwichCard({ set: surprise, ...Analysis.explain(E, surprise) }, "🎲 Surprise", "s", { cls: "surprise-card" }) : "";
+  so.innerHTML = surprise ? sandwichCard({ set: surprise, ...Analysis.explain(eng(), surprise) }, "Surprise", "s", { cls: "surprise-card" }) : "";
   if (tab === "build") history.replaceState(null, "", "#" + buildQuery());
 }
 for (const host of ["#results", "#surprise-out"]) $(host).addEventListener("click", (e) => {
@@ -933,7 +982,8 @@ addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => (tab 
 buildPalette();
 recompute();
 syncBars();
-if (!location.hash) current = POPULAR[0];
+current = POPULAR[0]; // Pindakaas until a link names another topping
+$("#home").onclick = (e) => { e.preventDefault(); openItem(POPULAR[0]); };
 route();
 </script>
 </body>

@@ -983,8 +983,8 @@ addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => (tab 
 buildPalette();
 recompute();
 syncBars();
-current = POPULAR[0]; // Pindakaas until a link names another topping
-$("#home").onclick = (e) => { e.preventDefault(); openItem(POPULAR[0]); };
+// the logo goes back to the start: Pairings with nothing picked yet
+$("#home").onclick = (e) => { e.preventDefault(); current = -1; if (location.hash === "#search") show("search"); else location.hash = "search"; window.scrollTo({ top: 0, behavior: "smooth" }); };
 route();
 </script>
 </body>

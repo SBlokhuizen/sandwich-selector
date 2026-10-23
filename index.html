@@ -145,6 +145,7 @@ h3 { font-size: 15px; margin: 0 0 8px; }
 @media (prefers-reduced-motion: reduce) { .drop { animation: none; } }
 .wild .meter i { background: var(--bad); }
 .sugg-toggle { margin-top: 18px; }
+.btn.ghost.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 60; }
 .toast.on { opacity: 1; transform: translateX(-50%); }
 
@@ -215,14 +216,14 @@ tbody tr:hover { background: var(--surface-2); }
 
   <section id="tab-build" role="tabpanel">
     <h1>Build a sandwich</h1>
-    <p class="lead">Stack the toppings you want and watch your sandwich grow. Ask for suggestions to get combinations where <i>every</i> ingredient goes well with every other one, or switch to Unhinged for ones where nothing does. Butter is assumed, so it is never suggested on its own.</p>
+    <p class="lead">Stack the toppings you want and watch your sandwich grow. Ask for suggestions to get combinations where <i>every</i> ingredient goes well with every other one, or for cursed ones where nothing does. Butter is assumed, so it is never suggested on its own.</p>
     <div class="build-top">
     <div class="card stack">
       <div class="combo"><input id="bq" placeholder="Add a topping you want on it…" aria-label="Add a topping"></div>
       <div class="row"><span class="muted small lbl">Must include:</span><div class="chips" id="seeds"></div></div>
       <div class="row"><span class="muted small lbl">Never include:</span><div class="chips" id="nevers"></div><div class="combo mini-combo"><input id="nq" placeholder="Leave out…" aria-label="Leave out a topping"></div></div>
       <div class="row" style="justify-content:space-between">
-        <div class="row"><span class="muted small lbl">Toppings per sandwich:</span><div class="seg" id="size"></div><div class="seg" id="mode"><button data-w="">Tasty</button><button data-w="1">Unhinged</button></div></div>
+        <div class="row"><span class="muted small lbl">Toppings per sandwich:</span><div class="seg" id="size"></div></div>
         <div class="row"><label class="switch" title="Only pairs that were checked by hand (at +50 or better), or that the flavour model is very sure of (+80 or better)"><input type="checkbox" id="strict"> Proven pairs only</label><button class="btn ghost" id="share-build" title="Copy a link to these settings">Copy link</button><button class="btn" id="surprise">Surprise me</button></div>
       </div>
       <div class="row" style="align-items:flex-start"><span class="muted small lbl" style="padding-top:5px">Or start from a classic:</span><div class="chips" id="classics" style="flex:1"></div></div>
@@ -230,7 +231,7 @@ tbody tr:hover { background: var(--surface-2); }
     <div class="card stage stage-card"><div class="plate" id="plate"></div><div class="caption" id="stage-caption"></div></div>
     </div>
     <div id="surprise-out" style="margin-top:18px" hidden></div>
-    <button class="btn ghost sugg-toggle" id="sugg-toggle" aria-expanded="false"></button>
+    <div class="row sugg-toggle"><button class="btn ghost" id="sugg-toggle" aria-expanded="false"></button><button class="btn ghost" id="cursed-toggle" aria-expanded="false"></button></div>
     <div id="results" class="grid g2" style="margin-top:18px" hidden></div>
   </section>
 
@@ -435,8 +436,7 @@ function renderSearch() {
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:10px">
-        <div class="row"><div class="seg" id="order"><button data-u="" class="${unhinged ? "" : "on"}">Best pairings</button><button data-u="1" class="${unhinged ? "on" : ""}">Unhinged pairings</button></div>
-          <span class="muted small">${unhinged ? "worst match first" : "best match first"}</span></div>
+        <div class="row"><div class="seg" id="order"><button data-u="" class="${unhinged ? "" : "on"}">Best pairings</button><button data-u="1" class="${unhinged ? "on" : ""}">Unhinged pairings</button></div></div>
         <div class="chips"><span class="chip ${catFilter ? "" : "on"}" data-cat="">All</span>${cats.map((k) => `<span class="chip ${catFilter === k ? "on" : ""}" data-cat="${k}">${dot(CAT[k][1])}${CAT[k][0]}</span>`).join("")}</div>
       </div>
       <p class="muted small" style="margin:0 0 8px">≈ marks a score estimated from flavour profiles and recipe data; the rest were checked by hand.</p>
@@ -451,7 +451,7 @@ function renderSearch() {
 const E = Analysis.engine(S, items, { known: DATA.K || [], classics: DATA.classics || [] });
 const sure = (a, b) => !DATA.K || E.isKnown[a][b] === 1;
 let seeds = [], nevers = [], size = 3, strict = false, wild = false, showSugg = false, swapOpen = null, surprise = null, surpriseSeed = 1, resCache = {};
-// Unhinged: the same engine on flipped scores, so it hunts for sandwiches where every pair clashes.
+// Cursed suggestions (wild): the same engine on flipped scores, so it hunts for sandwiches where every pair clashes.
 // Cuisines are blanked so that mixing them is not marked down there.
 let EU = null;
 const eng = () => (wild ? (EU ||= Analysis.engine(S.map((r) => r.map((v) => -v)), items.map((it) => ({ ...it, cuisine: [] })), { known: DATA.K || [] })) : E);
@@ -463,7 +463,7 @@ function buildQuery(w = seeds, n = size, withNevers = true) {
   if (withNevers && nevers.length) p.set("without", nevers.map((i) => items[i].name).join(","));
   p.set("n", n);
   if (withNevers && strict) p.set("proven", 1);
-  if (wild) p.set("unhinged", 1);
+  if (wild) p.set("cursed", 1);
   return "build?" + p;
 }
 function loadBuild(q) {
@@ -473,7 +473,8 @@ function loadBuild(q) {
   const n = +p.get("n");
   if (n >= 2 && n <= 5) size = n;
   strict = p.get("proven") === "1";
-  wild = p.get("unhinged") === "1";
+  wild = p.get("cursed") === "1";
+  showSugg ||= wild;
   swapOpen = surprise = null;
 }
 const linkTo = (q) => location.href.split("#")[0] + "#" + q;
@@ -503,8 +504,10 @@ combo($("#bq"), (i) => { if (!seeds.includes(i)) seeds.push(i); nevers = nevers.
 combo($("#nq"), (i) => { if (!nevers.includes(i)) nevers.push(i); seeds = seeds.filter((x) => x !== i); changed(); }, (i) => !nevers.includes(i) && !BUTTER.has(i));
 $("#share-build").onclick = () => copyLink(linkTo(buildQuery()));
 $("#strict").onchange = (e) => { strict = e.target.checked; changed(); };
-$("#mode").onclick = (e) => { const b = e.target.closest("button"); if (b) { wild = !!b.dataset.w; changed(); } };
-$("#sugg-toggle").onclick = () => { showSugg = !showSugg; renderBuild(); };
+// two buttons, one list: clicking the open one closes it, the other switches to its kind
+const openList = (cursed) => { const close = showSugg && wild === cursed; showSugg = !close; wild = !close && cursed; swapOpen = surprise = null; renderBuild(); };
+$("#sugg-toggle").onclick = () => openList(false);
+$("#cursed-toggle").onclick = () => openList(true);
 $("#surprise").onclick = () => {
   const n = seeds.length >= size ? Math.min(5, seeds.length + 1) : size;
   if (seeds.length >= n) return toast("Remove a topping to leave room for a surprise");
@@ -547,8 +550,8 @@ function penaltyText(p) {
 const CLASSIC_WORD = { is: "Classic", extends: "Classic, extended:", part: "From the classic" };
 function sandwichCard({ set, score, harmony, penalties, weakest, pairs, classic, bonus }, title, key, { mine = false, cls = "" } = {}) {
   const why = [];
-  // in unhinged mode the engine sees flipped scores; always show the real ones
-  if (weakest && set.length > 2) { const v = S[weakest[0]][weakest[1]]; why.push(`<span>${wild ? "Least unhinged pair" : "Weakest link"}: ${esc(items[weakest[0]].name)} × ${esc(items[weakest[1]].name)} <b style="color:${scoreColor(v)}">${fmt(v)}</b></span>`); }
+  // for cursed suggestions the engine sees flipped scores; always show the real ones
+  if (weakest && set.length > 2) { const v = S[weakest[0]][weakest[1]]; why.push(`<span>${wild ? "Least cursed pair" : "Weakest link"}: ${esc(items[weakest[0]].name)} × ${esc(items[weakest[1]].name)} <b style="color:${scoreColor(v)}">${fmt(v)}</b></span>`); }
   if (penalties.length || bonus) why.push(`<span>${wild ? "Chaos" : "Taste"} ${pct(harmony)}, then:</span>`, ...penalties.map((p) => `<span><span class="neg">−${pct(p.value)}</span> ${penaltyText(p)}</span>`));
   if (bonus) why.push(`<span><span class="pos">+${pct(bonus)}</span> ${classic.kind === "part" ? "part of" : classic.kind === "extends" ? "builds on" : "is"} a classic: ${esc(classic.name)}</span>`);
   const open = swapOpen && swapOpen.key === key ? swapOpen.k : -1;
@@ -560,7 +563,7 @@ function sandwichCard({ set, score, harmony, penalties, weakest, pairs, classic,
   }
   const sorted = pairs.slice().sort((p, q) => q[2] - p[2]);
   return `<div class="card sandwich ${cls} ${wild ? "wild" : ""}" data-key="${key}" data-set="${set.join(",")}">
-    <div class="row" style="justify-content:space-between"><h3 style="margin:0">${title}</h3><span class="score" style="color:${wild ? "var(--bad)" : scoreTone(score)}" title="${wild ? "How badly the pairs clash, minus deductions" : "Pair harmony minus deductions, plus a bonus for classics"}">${pct(Math.min(1, score))} ${wild ? "unhinged" : "harmony"}</span></div>
+    <div class="row" style="justify-content:space-between"><h3 style="margin:0">${title}</h3><span class="score" style="color:${wild ? "var(--bad)" : scoreTone(score)}" title="${wild ? "How badly the pairs clash, minus deductions" : "Pair harmony minus deductions, plus a bonus for classics"}">${pct(Math.min(1, score))} ${wild ? "cursed" : "harmony"}</span></div>
     ${classic ? `<div><span class="badge">★ ${CLASSIC_WORD[classic.kind]} ${esc(classic.name)}</span></div>` : ""}
     <div class="meter"><i style="width:${Math.min(1, Math.max(0, score)) * 100}%"></i></div>
     <div class="layers">${set.map((i, k) => `<span class="chip ${seeds.includes(i) ? "on" : ""} ${k === open ? "sel" : ""}" data-swap="${k}" title="Swap ${esc(items[i].name)}">${catDot(i)}${esc(items[i].name)} <span class="x">⇄</span></span>`).join("")}</div>
@@ -573,15 +576,15 @@ function sandwichCard({ set, score, harmony, penalties, weakest, pairs, classic,
 // The animated sandwich: toppings that were not on it before drop in, then the top slice lands again.
 let stageKey = null, onStage = [];
 function renderStage() {
-  const key = seeds.join(",") + (wild ? "|u" : "");
+  const key = seeds.join(",");
   if (key !== stageKey) {
     const fresh = seeds.flatMap((s, k) => (onStage.includes(s) ? [] : [k]));
     $("#plate").innerHTML = Sandwich.svg(items, seeds, { fresh, topDrops: fresh.length > 0 }).svg;
     stageKey = key; onStage = seeds.slice();
   }
-  const x = seeds.length >= 2 && Analysis.explain(eng(), seeds);
+  const x = seeds.length >= 2 && Analysis.explain(E, seeds);
   $("#stage-caption").innerHTML = !seeds.length ? "Add a topping to start building" : seeds.length < 2 ? "Add another topping to see how they get on"
-    : `<b style="color:${wild ? "var(--bad)" : scoreTone(x.score)}">${pct(Math.min(1, x.score))} ${wild ? "unhinged" : "harmony"}</b>`;
+    : x.score < 0 ? `<b style="color:var(--bad)">${pct(Math.min(1, -x.score))} cursed</b>` : `<b style="color:${scoreTone(x.score)}">${pct(Math.min(1, x.score))} harmony</b>`;
 }
 function renderBuild() {
   if (seeds.length > size) size = Math.min(5, seeds.length);
@@ -591,12 +594,15 @@ function renderBuild() {
   $("#seeds").querySelectorAll("[data-rm]").forEach((ch) => (ch.onclick = () => { seeds = seeds.filter((s) => s !== +ch.dataset.rm); changed(); }));
   $("#nevers").querySelectorAll("[data-rmn]").forEach((ch) => (ch.onclick = () => { nevers = nevers.filter((s) => s !== +ch.dataset.rmn); changed(); }));
   const mine = seeds.length >= size;
+  if (mine) wild = false; // a finished sandwich only has its own breakdown, never cursed suggestions
   $("#strict").checked = strict;
-  $("#mode").querySelectorAll("button").forEach((b) => b.classList.toggle("on", !!b.dataset.w === wild));
   renderStage();
-  const tg = $("#sugg-toggle");
-  tg.textContent = `${showSugg ? "Hide" : "Show"} ${mine ? "the score breakdown" : wild ? "unhinged suggestions" : "suggestions"}`;
-  tg.setAttribute("aria-expanded", showSugg);
+  const tg = $("#sugg-toggle"), cg = $("#cursed-toggle");
+  tg.textContent = `${showSugg && !wild ? "Hide" : "Show"} ${mine ? "the score breakdown" : "suggestions"}`;
+  cg.textContent = `${showSugg && wild ? "Hide" : "Show"} cursed suggestions`;
+  tg.setAttribute("aria-expanded", showSugg && !wild); cg.setAttribute("aria-expanded", showSugg && wild);
+  tg.classList.toggle("on", showSugg && !wild); cg.classList.toggle("on", showSugg && wild);
+  cg.hidden = mine;
   $("#results").hidden = !showSugg;
   // suggestions are only searched for once someone asks to see them
   const key = [seeds, nevers, size, strict, wild].join("|");

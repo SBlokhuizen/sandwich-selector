@@ -32,6 +32,7 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 a.brand { color: inherit; text-decoration: none; }
+.brand .logo { flex: none; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 button, input, select { font: inherit; color: inherit; }
 a { color: var(--accent); }
@@ -191,7 +192,7 @@ tbody tr:hover { background: var(--surface-2); }
 <body>
 <header class="top">
   <div class="wrap">
-    <a class="brand" id="home" href="#search" title="Back to the start">The Sandwich Selector</a>
+    <a class="brand" id="home" href="#search" title="Back to the start"><svg class="logo" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><path d="M3 14 V9 Q3 4 8 4 H24 Q29 4 29 9 V14 Z" fill="#c8843e"/><rect x="5" y="11" width="22" height="3" rx="1.5" fill="#f3d9a4"/><path d="M2 16 q2 -2.5 4 0 t4 0 t4 0 t4 0 t4 0 t4 0 t4 0 v2 H2 Z" fill="#74b816"/><rect x="3" y="18" width="26" height="3" rx="1.5" fill="#e03131"/><path d="M2 21 H30 L29 24 H3 Z" fill="#fab005"/><rect x="3" y="24" width="26" height="5" rx="2.5" fill="#c8843e"/></svg>The Sandwich Selector</a>
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="search">Pairings</button>
       <button role="tab" data-tab="build">Build a sandwich</button>

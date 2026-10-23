@@ -581,7 +581,10 @@ let stageKey = null, onStage = [];
 function renderStage() {
   const key = seeds.join(",");
   if (key !== stageKey) {
-    const fresh = seeds.flatMap((s, k) => (onStage.includes(s) ? [] : [k]));
+    // adding to the same sandwich drops only the new toppings; a different sandwich (a classic,
+    // a suggestion) is built from scratch so everything falls; removing one drops nothing
+    const grows = onStage.every((s, k) => seeds[k] === s), anyNew = seeds.some((s) => !onStage.includes(s));
+    const fresh = grows ? seeds.flatMap((s, k) => (k < onStage.length ? [] : [k])) : anyNew ? seeds.map((_, k) => k) : [];
     $("#plate").innerHTML = Sandwich.svg(items, seeds, { fresh, topDrops: fresh.length > 0 }).svg;
     stageKey = key; onStage = seeds.slice();
   }

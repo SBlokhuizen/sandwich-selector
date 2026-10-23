@@ -52,6 +52,11 @@ const c = A.communities(DATA.S, { thr: 7, bad: -5, skip: butter });
 // every cluster member has a good partner inside its own cluster
 c.forEach((k, i) => { if (c.filter((x) => x === k).length > 1) assert(c.some((x, j) => j !== i && x === k && DATA.S[i][j] >= 7), DATA.items[i].name); });
 console.log("communities:", Math.max(...c) + 1, "| PB suggestions:", r.map((x) => x.set.map((i) => DATA.items[i].name).join(" + ")).join(" ; "));
+// cursed suggestions judge only the pairs a suggestion brings, not the seeds' own (great) pair
+const EC = A.engine(DATA.S.map((r) => r.map((v) => -v)), DATA.items.map((it) => ({ ...it, cuisine: [] })), { known: DATA.K, ownPairsFree: true });
+const cursed = A.suggest(EC, [idx("Pindakaas"), idx("Banaan")], 3, { count: 3, exclude: butter });
+assert(cursed.length === 3 && cursed.every((x) => x.score > 0.3), "cursed scores: " + cursed.map((x) => x.score.toFixed(2)));
+assert(A.explain(E, [idx("Pindakaas"), idx("Banaan"), idx("Honing")], [idx("Pindakaas"), idx("Banaan")]).harmony === A.explain(E, [idx("Pindakaas"), idx("Banaan"), idx("Honing")]).harmony, "tasty engine unchanged");
 // every topping is drawn as itself on the animated sandwich, not as a generic fallback
 const Sandwich = require("./sandwich.js");
 const unlooked = DATA.items.filter((it) => !Sandwich.look(it).matched).map((it) => it.name);

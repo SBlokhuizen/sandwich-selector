@@ -460,7 +460,7 @@ let seeds = [], nevers = [], extra = 2, whole = 3, strict = false, wild = false,
 // Cursed suggestions (wild): the same engine on flipped scores, so it hunts for sandwiches where every pair clashes.
 // Cuisines are blanked so that mixing them is not marked down there.
 let EU = null;
-const eng = () => (wild ? (EU ||= Analysis.engine(S.map((r) => r.map((v) => -v)), items.map((it) => ({ ...it, cuisine: [] })), { known: DATA.K || [] })) : E);
+const eng = () => (wild ? (EU ||= Analysis.engine(S.map((r) => r.map((v) => -v)), items.map((it) => ({ ...it, cuisine: [] })), { known: DATA.K || [], ownPairsFree: true })) : E);
 const byName = (n) => items.findIndex((it) => it.name === n);
 const parseList = (v) => [...new Set((v ? v.split(",") : []).map(byName).filter((i) => i >= 0))];
 function buildQuery(w = seeds, settings = true) {
@@ -562,7 +562,7 @@ function sandwichCard(r, title, key) {
   const { set, score, classic } = r, open = swapOpen && swapOpen.key === key ? swapOpen.k : -1;
   let swap = "";
   if (open >= 0) {
-    const it = set[open], opts = Analysis.swaps(eng(), set, open, { ...engineOpts(), count: 8 });
+    const it = set[open], opts = Analysis.swaps(eng(), set, open, { ...engineOpts(), count: 8, seeds });
     swap = `<div class="swap"><div class="row" style="justify-content:space-between"><span class="small"><b>Swap ${esc(items[it].name)}</b> for…</span><span class="small"><a href="#" data-open="${it}">all its pairings</a> · <a href="#" data-never="${it}">never include</a></span></div>
       <div class="opts">${opts.map((o) => `<span class="chip" data-pick="${o.set.join(",")}" title="New score ${pct(o.score)}">${catDot(o.item)}${esc(items[o.item].name)} <span class="delta" style="color:${o.delta > 0.005 ? "var(--good)" : o.delta < -0.005 ? "var(--bad)" : "var(--muted)"}">${o.delta >= 0 ? "+" : "−"}${pct(Math.abs(o.delta))}</span></span>`).join("")}</div></div>`;
   }
@@ -638,7 +638,7 @@ $("#results").addEventListener("click", (e) => {
   } else if (el("[data-pick]")) {
     // a swap edits that suggestion (kept in the cache); "Put it on my sandwich" is what changes yours
     const next = el("[data-pick]").dataset.pick.split(",").map(Number);
-    shown[+key.slice(1)] = { set: next, ...Analysis.explain(eng(), next) };
+    shown[+key.slice(1)] = { set: next, ...Analysis.explain(eng(), next, seeds) };
     swapOpen = null; renderBuild();
   } else if (el("[data-never]")) {
     e.preventDefault();

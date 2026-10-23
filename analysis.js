@@ -158,11 +158,14 @@ const Analysis = (() => {
     });
   }
 
-  // Cohesion of a set: mostly the mean pair score, pulled down by its worst pair.
-  function fit(S, set) {
+  // Cohesion of a set: mostly the mean pair score, pulled down by its worst pair. Pairs between two `fixed` toppings are skipped.
+  function fit(S, set, fixed = []) {
     let s = 0, n = 0, min = 10;
     for (let x = 0; x < set.length; x++)
-      for (let y = x + 1; y < set.length; y++) { const v = S[set[x]][set[y]]; s += v; n++; if (v < min) min = v; }
+      for (let y = x + 1; y < set.length; y++) {
+        if (fixed.includes(set[x]) && fixed.includes(set[y])) continue;
+        const v = S[set[x]][set[y]]; s += v; n++; if (v < min) min = v;
+      }
     return n ? (0.6 * (s / n) + 0.4 * min) / 10 : 0;
   }
 
@@ -191,7 +194,9 @@ const Analysis = (() => {
   //   known:    hand-set pairs [[i, j], ...]; every other score is the flavour model's estimate
   //   classics: [{ name, set }] sandwiches people actually eat
   //   doubt:    how much an estimated pair is marked down while ranking (on the -10..10 scale)
-  function engine(S, items, { known = [], classics = [], doubt = 2 } = {}) {
+  //   ownPairsFree: judge a sandwich only on pairs that involve a suggested topping, not the seeds among themselves
+  //                 (cursed suggestions: a great pair you chose would otherwise sink every result)
+  function engine(S, items, { known = [], classics = [], doubt = 2, ownPairsFree = false } = {}) {
     const n = S.length, sim = profileSim(S);
     const isKnown = Array.from({ length: n }, () => new Uint8Array(n));
     for (const [i, j] of known) isKnown[i][j] = isKnown[j][i] = 1;
@@ -200,7 +205,7 @@ const Analysis = (() => {
     // interchangeable: same category and the rest of the world treats them alike (e.g. two hams)
     const subst = (a, b) => items[a].cat === items[b].cat && sim[a][b] > 0.85;
     const cuisines = items.map((it) => (it.cuisine || []).filter((c) => c !== "uni" && c !== "sw").map((c) => (c === "snack" ? "nl" : c)));
-    return { S, B, items, sim, subst, isKnown, classics, cuisines, hasKnown: known.length > 0 };
+    return { S, B, items, sim, subst, isKnown, classics, cuisines, hasKnown: known.length > 0, ownPairsFree };
   }
 
   // The classic a sandwich is, extends, or is a faithful part of (every topping of it belongs to the classic).
@@ -233,11 +238,13 @@ const Analysis = (() => {
   }
 
   // Full breakdown of a sandwich: taste harmony, then deductions for redundancy and missing structure.
-  function explain(E, set) {
+  function explain(E, set, seeds = []) {
     const { S, B, items, sim, subst, isKnown } = E;
+    // only when the sandwich is the seeds plus something suggested; a sandwich of just the seeds is judged whole
+    const fixed = E.ownPairsFree && seeds.every((i) => set.includes(i)) && set.length > seeds.length ? seeds : [];
     const pairs = [];
     for (let x = 0; x < set.length; x++) for (let y = x + 1; y < set.length; y++) pairs.push([set[x], set[y], S[set[x]][set[y]], !E.hasKnown || isKnown[set[x]][set[y]] === 1]);
-    const harmony = fit(S, set);
+    const harmony = fit(S, set, fixed);
     const penalties = [];
     for (const [a, b, v, sure] of pairs) {
       // a proven great pair is fine; otherwise two interchangeable toppings, or two mains of a kind, cost
@@ -253,15 +260,16 @@ const Analysis = (() => {
     if (set.length >= 2 && !set.some((i) => MAIN.has(items[i].cat))) penalties.push({ kind: "nomain", value: 0.08 });
     for (const i of strangers(E, set)) penalties.push({ kind: "stranger", a: i, value: 0.06 });
     // ranking uses the believed scores: estimated pairs count a little lower than proven ones
-    const unsure = E.hasKnown ? fit(B, set) - harmony : 0;
+    const unsure = E.hasKnown ? fit(B, set, fixed) - harmony : 0;
     if (unsure < -0.005) penalties.push({ kind: "unproven", value: -unsure, count: pairs.filter((p) => !p[3]).length });
     const classic = classicOf(E, set);
     const bonus = classic ? (classic.kind === "part" ? 0.06 : 0.1) : 0;
-    const weakest = pairs.length ? pairs.reduce((p, q) => (q[2] < p[2] ? q : p)) : null;
+    const judged = pairs.filter(([a, b]) => !(fixed.includes(a) && fixed.includes(b)));
+    const weakest = judged.length ? judged.reduce((p, q) => (q[2] < p[2] ? q : p)) : null;
     const score = harmony - sum(penalties.map((p) => p.value)) + bonus;
     return { harmony, score, penalties, weakest, pairs, classic, bonus };
   }
-  const score = (E, set) => explain(E, set).score;
+  const score = (E, set, seeds) => explain(E, set, seeds).score;
 
   // Strict mode: every pair hand-set at +0.5 or better, or estimated at +0.8 or better.
   // Pairs between two of the `fixed` toppings (the ones you insisted on) are your call, not checked.
@@ -306,7 +314,7 @@ const Analysis = (() => {
         }
       const ranked = [...seen.values()]
         .filter((s) => !strict || proven(E, s, seeds))
-        .map((s) => [score(E, s) + (noise ? noise * -Math.log(-Math.log(r() || 1e-9)) : 0), s])
+        .map((s) => [score(E, s, seeds) + (noise ? noise * -Math.log(-Math.log(r() || 1e-9)) : 0), s])
         .sort((a, b) => b[0] - a[0]);
       // keep the beam varied: one star topping (say mozzarella) may fill at most a sixth of it
       const cap = Math.ceil(width / 6), inBeam = new Map();
@@ -327,16 +335,16 @@ const Analysis = (() => {
       set.forEach((i) => uses.set(i, (uses.get(i) || 0) + 1));
       if (out.length >= count) break;
     }
-    return out.map((set) => ({ set, ...explain(E, set) }));
+    return out.map((set) => ({ set, ...explain(E, set, seeds) }));
   }
 
   // Best replacements for set[k], ranked by the new score.
-  function swaps(E, set, k, { count = 6, exclude = new Set(), proven: strict = false } = {}) {
-    const base = score(E, set);
+  function swaps(E, set, k, { count = 6, exclude = new Set(), proven: strict = false, seeds = [] } = {}) {
+    const base = score(E, set, seeds);
     return E.items
       .map((_, c) => c)
       .filter((c) => !exclude.has(c) && !set.includes(c))
-      .map((c) => { const next = set.slice(); next[k] = c; return { item: c, set: next, score: score(E, next) }; })
+      .map((c) => { const next = set.slice(); next[k] = c; return { item: c, set: next, score: score(E, next, seeds) }; })
       .filter((s) => !strict || proven(E, s.set, set.filter((_, j) => j !== k)))
       .sort((a, b) => b.score - a.score)
       .slice(0, count)

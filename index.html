@@ -191,7 +191,7 @@ tbody tr:hover { background: var(--surface-2); }
 <main class="wrap">
   <section id="tab-search" role="tabpanel">
     <h1>What goes with your topping?</h1>
-    <p class="lead">Pick any of <span class="n-items"></span> Dutch sandwich toppings and see how well every other topping pairs with it — from <b style="color:var(--good)">+1 perfect</b> through 0 neutral to <b style="color:var(--bad)">−1 awful</b>.</p>
+    <p class="lead">Pick any of <span class="n-items"></span> Dutch sandwich toppings and see how well every other topping pairs with it — from <b style="color:var(--good)">+100 perfect</b> through 0 neutral to <b style="color:var(--bad)">−100 awful</b>.</p>
     <div class="combo"><input id="q" placeholder="Search a topping, e.g. pindakaas, oude kaas, haring…" aria-label="Search a topping"></div>
     <div class="row" style="margin-top:14px"><span class="muted small">Try:</span><div class="chips" id="popular"></div></div>
     <div id="detail" class="stack" style="margin-top:24px"></div>
@@ -206,7 +206,7 @@ tbody tr:hover { background: var(--surface-2); }
       <div class="row"><span class="muted small lbl">Never include:</span><div class="chips" id="nevers"></div><div class="combo mini-combo"><input id="nq" placeholder="Leave out…" aria-label="Leave out a topping"></div></div>
       <div class="row" style="justify-content:space-between">
         <div class="row"><span class="muted small lbl">Toppings per sandwich:</span><div class="seg" id="size"></div></div>
-        <div class="row"><label class="switch" title="Only pairs that were checked by hand (at +0.5 or better), or that the flavour model is very sure of (+0.8 or better)"><input type="checkbox" id="strict"> Proven pairs only</label><button class="btn ghost" id="share-build" title="Copy a link to these settings">Copy link</button><button class="btn" id="surprise">🎲 Surprise me</button></div>
+        <div class="row"><label class="switch" title="Only pairs that were checked by hand (at +50 or better), or that the flavour model is very sure of (+80 or better)"><input type="checkbox" id="strict"> Proven pairs only</label><button class="btn ghost" id="share-build" title="Copy a link to these settings">Copy link</button><button class="btn" id="surprise">🎲 Surprise me</button></div>
       </div>
       <div class="row" style="align-items:flex-start"><span class="muted small lbl" style="padding-top:5px">Or start from a classic:</span><div class="chips" id="classics" style="flex:1"></div></div>
     </div>
@@ -229,7 +229,7 @@ tbody tr:hover { background: var(--surface-2); }
   <section id="tab-matrix" role="tabpanel">
     <h1>The full matrix</h1>
     <p class="lead">Every topping against every other: <b style="color:var(--good)">green</b> pairs well, <b style="color:var(--bad)">red</b> clashes. Sorted by cluster, the green blocks on the diagonal are the groups that belong together. Hover for details, click to open a topping.</p>
-    <div class="row" style="margin-bottom:12px"><span class="muted small">Order by</span><div class="seg" id="morder"><button data-v="comm" class="on">Cluster</button><button data-v="cat">Category</button></div><div class="legend"><span>−1</span><span class="ramp" id="ramp"></span><span>+1</span></div></div>
+    <div class="row" style="margin-bottom:12px"><span class="muted small">Order by</span><div class="seg" id="morder"><button data-v="comm" class="on">Cluster</button><button data-v="cat">Category</button></div><div class="legend"><span>−100</span><span class="ramp" id="ramp"></span><span>+100</span></div></div>
     <div class="card viz"><canvas id="matrix-canvas"></canvas></div>
     <div class="chips" id="mlegend" style="margin-top:12px"></div>
   </section>
@@ -257,7 +257,8 @@ const CAT = {
 };
 const COMM_COLORS = ["#4263eb", "#e8590c", "#2f9e44", "#ae3ec9", "#f08c00", "#1098ad", "#e64980", "#74b816", "#7048e8", "#c92a2a", "#0ca678", "#a61e4d", "#5c940d", "#364fc7"];
 const cssVar = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const fmt = (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v / 10).toFixed(1);
+// scores are stored as integers -10..10 and shown on a -100..+100 scale
+const fmt = (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v * 10);
 const verdict = (v) => (v >= 8 ? "Perfect" : v >= 4 ? "Good" : v > -4 ? "Neutral" : v > -8 ? "Bad" : "Awful");
 const dot = (c) => `<span class="dot" style="background:${c}"></span>`;
 const catDot = (i) => dot(CAT[items[i].cat][1]);
@@ -908,7 +909,7 @@ function renderInsights() {
       <h2>How connected is each topping?</h2>
       <p class="muted small"><b>Good partners</b>: how many toppings it pairs well with. <b>Pairing strength</b>: the sum of those scores. <b>Avg score</b>: its average with everything (versatility). <b>Partners like each other</b>: share of its partners that also pair well with one another (high = a tight niche, low = a connector). Click a column to sort, a row to open it.</p>
       <div class="tablewrap" style="margin-top:10px"><table id="ctable"><thead><tr>${cols.map(([k, l]) => `<th data-k="${k}" class="${k === "name" ? "" : "num"} ${k === sortKey ? "sorted" : ""}">${l}${k === sortKey ? (sortDir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead><tbody>
-        ${rows.map((i) => { const s = stats[i]; return `<tr data-open="${i}"><td>${catDot(i)} ${esc(items[i].name)}</td><td class="num">${s.degree}</td><td class="num">${s.strength.toFixed(1)}</td><td class="num">${fmt(Math.round(s.mean * 10))}</td><td class="num">${Math.round(s.clustering * 100)}%</td><td class="num">${s.open}</td></tr>`; }).join("")}
+        ${rows.map((i) => { const s = stats[i]; return `<tr data-open="${i}"><td>${catDot(i)} ${esc(items[i].name)}</td><td class="num">${s.degree}</td><td class="num">${Math.round(s.strength * 100)}</td><td class="num">${fmt(Math.round(s.mean * 10))}</td><td class="num">${Math.round(s.clustering * 100)}%</td><td class="num">${s.open}</td></tr>`; }).join("")}
       </tbody></table></div>
     </div>`;
   $("#ctable thead").onclick = (e) => { const th = e.target.closest("th"); if (!th) return; const k = th.dataset.k; sortDir = k === sortKey ? -sortDir : k === "name" ? 1 : -1; sortKey = k; renderInsights(); };

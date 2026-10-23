@@ -375,7 +375,7 @@ const POPULAR = ["Pindakaas", "Hagelslag melk", "Oude kaas", "Kroket", "Hollands
 $("#popular").innerHTML = POPULAR.map((i) => `<span class="chip" data-open="${i}">${catDot(i)}${esc(items[i].name)}</span>`).join("");
 document.querySelectorAll(".n-items").forEach((el) => (el.textContent = N));
 combo($("#q"), openItem);
-let catFilter = null;
+let catFilter = null, unhinged = false;
 
 function pairRow(i, v, ok = true) {
   const w = (Math.abs(v) / 10) * 50;
@@ -388,7 +388,7 @@ function renderSearch() {
   const el = $("#detail");
   if (current < 0) { el.innerHTML = ""; return; }
   const i = current, it = items[i], st = G.stats[i], c = G.comm[i];
-  const others = d3.range(N).filter((j) => j !== i && (!catFilter || items[j].cat === catFilter)).sort((a, b) => S[i][b] - S[i][a]);
+  const others = d3.range(N).filter((j) => j !== i && (!catFilter || items[j].cat === catFilter)).sort((a, b) => (unhinged ? -1 : 1) * (S[i][b] - S[i][a]));
   const degRank = d3.range(N).filter((j) => G.stats[j].degree > st.degree).length + 1;
   el.innerHTML = `
     <div class="card stack">
@@ -414,7 +414,8 @@ function renderSearch() {
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:10px">
-        <h3 style="margin:0">Everything, best match first</h3>
+        <div class="row"><div class="seg" id="order"><button data-u="" class="${unhinged ? "" : "on"}">Best pairings</button><button data-u="1" class="${unhinged ? "on" : ""}">🤪 Unhinged pairings</button></div>
+          <span class="muted small">${unhinged ? "worst match first" : "best match first"}</span></div>
         <div class="chips"><span class="chip ${catFilter ? "" : "on"}" data-cat="">All</span>${cats.map((k) => `<span class="chip ${catFilter === k ? "on" : ""}" data-cat="${k}">${dot(CAT[k][1])}${CAT[k][0]}</span>`).join("")}</div>
       </div>
       <p class="muted small" style="margin:0 0 8px">≈ marks a score estimated from flavour profiles and recipe data; the rest were checked by hand.</p>
@@ -422,6 +423,7 @@ function renderSearch() {
     </div>`;
   $("#to-build").onclick = () => { seeds = [i]; nevers = nevers.filter((x) => x !== i); swapOpen = surprise = null; location.hash = "build"; };
   el.querySelectorAll("[data-cat]").forEach((ch) => (ch.onclick = () => { catFilter = ch.dataset.cat || null; renderSearch(); }));
+  el.querySelectorAll("[data-u]").forEach((b) => (b.onclick = () => { unhinged = !!b.dataset.u; renderSearch(); }));
 }
 
 // ---------- Build tab (#build?with=A,B&without=C&n=3) ----------
